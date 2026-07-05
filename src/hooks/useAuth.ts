@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 import { trpc } from "@/providers/trpc";
 import type { User } from "@db/schema";
 
@@ -24,7 +24,7 @@ export function useAuth(options?: { redirectOnUnauthenticated?: boolean }) {
 
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await getSupabase().auth.getSession();
       if (session?.access_token) {
         localStorage.setItem("supabase_access_token", session.access_token);
       }
@@ -34,7 +34,7 @@ export function useAuth(options?: { redirectOnUnauthenticated?: boolean }) {
   }, []);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = getSupabase().auth.onAuthStateChange(
       (_event, session) => {
         if (session?.access_token) {
           localStorage.setItem("supabase_access_token", session.access_token);
@@ -61,14 +61,14 @@ export function useAuth(options?: { redirectOnUnauthenticated?: boolean }) {
   }, [redirectOnUnauthenticated, isLoading, serverLoading, serverUser, navigate]);
 
   const logout = useCallback(async () => {
-    await supabase.auth.signOut();
+    await getSupabase().auth.signOut();
     localStorage.removeItem("supabase_access_token");
     await utils.invalidate();
     navigate("/login");
   }, [utils, navigate]);
 
   const loginWithGitHub = useCallback(async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error } = await getSupabase().auth.signInWithOAuth({
       provider: "github",
       options: {
         redirectTo: `${window.location.origin}/dashboard`,
@@ -78,7 +78,7 @@ export function useAuth(options?: { redirectOnUnauthenticated?: boolean }) {
   }, []);
 
   const loginWithGoogle = useCallback(async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error } = await getSupabase().auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/dashboard`,
