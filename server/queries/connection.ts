@@ -13,6 +13,8 @@ function stripSslmode(url: string): string {
   try {
     const u = new URL(url);
     u.searchParams.delete("sslmode");
+    u.searchParams.delete("pgbouncer");
+    u.searchParams.delete("supa");
     return u.toString();
   } catch {
     return url;
@@ -25,8 +27,8 @@ export function getDb() {
 
     const pool = new Pool({
       connectionString: cleanUrl,
-      // Always allow self-signed certs (Supabase uses them)
-      ssl: env.isProduction ? { rejectUnauthorized: false } : false,
+      // Explicit SSL config: enable SSL, skip self-signed cert verification
+      ssl: { rejectUnauthorized: false },
       // Disable prepared statements for PgBouncer compatibility
       prepareThreshold: 0,
       connectionTimeoutMillis: 30000,
