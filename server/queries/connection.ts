@@ -9,10 +9,23 @@ const fullSchema = { ...schema, ...relations };
 let instance: ReturnType<typeof drizzle<typeof fullSchema>>;
 let rawPool: Pool | null = null;
 
+function stripSslmode(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.delete("sslmode");
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 export function getDb() {
   if (!instance) {
+    const cleanUrl = stripSslmode(env.databaseUrl);
+
     const pool = new Pool({
-      connectionString: env.databaseUrl,
+      connectionString: cleanUrl,
+      // Always allow self-signed certs (Supabase uses them)
       ssl: env.isProduction ? { rejectUnauthorized: false } : false,
       // Disable prepared statements for PgBouncer compatibility
       prepareThreshold: 0,

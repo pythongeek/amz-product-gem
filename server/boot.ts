@@ -15,14 +15,18 @@ app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 // Health check
 app.get("/api/health", (c) => c.json({ status: "ok", time: new Date().toISOString() }));
 
-// DB diagnostic — uses raw pg pool (no Drizzle prepared statements)
+// DB diagnostic — shows resolved connection string and tests raw query
 app.get("/api/debug/db", async (c) => {
   try {
     const pool = getRawPool();
     const result = await pool.query("SELECT current_database(), current_user, version()");
-    return c.json({ ok: true, dbInfo: result.rows[0] });
+    const redactedUrl = env.databaseUrl.replace(/:([^:@]+)@/, ":****@");
+    return c.json({
+      ok: true,
+      dbInfo: result.rows[0],
+      connectionString: redactedUrl,
+    });
   } catch (err: any) {
-    // Redact password from connection string for safety
     const redactedUrl = env.databaseUrl.replace(/:([^:@]+)@/, ":****@");
     return c.json({
       ok: false,
@@ -54,7 +58,6 @@ app.post("/api/cron/monitor", async (c) => {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  // Trigger monitoring check via tRPC
   const result = await appRouter.createCaller({
     req: c.req.raw,
     resHeaders: new Headers(),
