@@ -1,11 +1,11 @@
 import { env } from "./env";
 
-interface KimiMessage {
+interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
 }
 
-interface KimiResponse {
+interface ChatCompletionResponse {
   choices: Array<{
     message: {
       content: string;
@@ -13,22 +13,24 @@ interface KimiResponse {
   }>;
 }
 
-export async function callKimi(
-  messages: KimiMessage[],
+export async function callAI(
+  messages: ChatMessage[],
   temperature = 0.7
 ): Promise<string> {
-  if (!env.kimiApiKey) {
-    throw new Error("Kimi API key is not configured");
+  if (!env.aiApiKey) {
+    throw new Error(
+      "AI API key is not configured. Set AI_API_KEY or KIMI_API_KEY in your environment variables."
+    );
   }
 
-  const response = await fetch(`${env.kimiBaseUrl}/chat/completions`, {
+  const response = await fetch(`${env.aiBaseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${env.kimiApiKey}`,
+      Authorization: `Bearer ${env.aiApiKey}`,
     },
     body: JSON.stringify({
-      model: "moonshot-v1-128k",
+      model: env.aiModel,
       messages,
       temperature,
     }),
@@ -36,10 +38,10 @@ export async function callKimi(
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Kimi API error: ${error}`);
+    throw new Error(`AI API error (${response.status}): ${error}`);
   }
 
-  const data = (await response.json()) as KimiResponse;
+  const data = (await response.json()) as ChatCompletionResponse;
   return data.choices[0]?.message?.content || "";
 }
 

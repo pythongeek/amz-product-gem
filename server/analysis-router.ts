@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
-import { callKimi, BANGLA_SYSTEM_PROMPT } from "./lib/kimi";
+import { callAI, BANGLA_SYSTEM_PROMPT } from "./lib/kimi";
 import { getDb } from "./queries/connection";
 import { productScores } from "@db/schema";
 
@@ -51,7 +51,7 @@ export const analysisRouter = createRouter({
 ৭. ঝুঁকি বিষয়
 ৮. সুপারিশ (PASS/CAUTION/FAIL)`;
 
-      const analysis = await callKimi([
+      const analysis = await callAI([
         { role: "system", content: BANGLA_SYSTEM_PROMPT },
         { role: "user", content: discoveryPrompt },
       ]);
@@ -164,7 +164,7 @@ ${input.analysis}
 
 ব্যবসায়িক টার্মগুলোর বাংলা অনুবাদ বন্ধনীতে দিন। টেবিল ও বুলেট পয়েন্ট ব্যবহার করুন।`;
 
-      const report = await callKimi([
+      const report = await callAI([
         { role: "system", content: BANGLA_SYSTEM_PROMPT },
         { role: "user", content: reportPrompt },
       ]);

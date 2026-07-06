@@ -28,8 +28,10 @@ export const env = {
     process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   supabaseAnonKey:
     process.env.SUPABASE_ANON_KEY || process.env.VITE_PUBLIC_SUPABASE_ANON_KEY || "",
-  kimiApiKey: process.env.KIMI_API_KEY ?? "",
-  kimiBaseUrl: process.env.KIMI_BASE_URL ?? "https://api.moonshot.cn/v1",
+  // AI API (OpenAI-compatible — works with Kimi, OpenAI, Groq, Together, etc.)
+  aiApiKey: process.env.AI_API_KEY || process.env.KIMI_API_KEY || process.env.OPENAI_API_KEY || "",
+  aiBaseUrl: process.env.AI_BASE_URL || process.env.KIMI_BASE_URL || "https://api.moonshot.cn/v1",
+  aiModel: process.env.AI_MODEL || process.env.KIMI_MODEL || "moonshot-v1-128k",
   jwtSecret: process.env.JWT_SECRET ?? "fba-research-secret-key-change-in-production",
   kimiAuthUrl: process.env.KIMI_AUTH_URL ?? "https://auth.kimi.com",
   kimiOpenUrl: process.env.KIMI_OPEN_URL ?? "https://open.kimi.com",
