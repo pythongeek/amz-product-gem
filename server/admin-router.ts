@@ -92,20 +92,26 @@ export const adminAuthRouter = createRouter({
     };
   }),
 
-  // Seed endpoint — creates default admin if none exists (public, idempotent)
+  // Seed endpoint — creates or resets the default admin (public, idempotent)
   ensureDefaultAdmin: publicQuery.mutation(async () => {
     const db = getDb();
+    const hash = await bcrypt.hash("admin123", 12);
 
     const existing = await db
       .select()
       .from(adminCredentials)
+      .where(eq(adminCredentials.username, "admin"))
       .limit(1);
 
     if (existing.length > 0) {
-      return { created: false, message: "Admin already exists" };
+      // Reset password to the known hash (fixes broken dummy hashes)
+      await db
+        .update(adminCredentials)
+        .set({ passwordHash: hash, isActive: true })
+        .where(eq(adminCredentials.username, "admin"));
+      return { created: false, reset: true, message: "Default admin password reset to: admin123" };
     }
 
-    const hash = await bcrypt.hash("admin123", 12);
     await db.insert(adminCredentials).values({
       username: "admin",
       passwordHash: hash,
