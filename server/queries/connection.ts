@@ -7,26 +7,28 @@ import * as relations from "@db/relations";
 const fullSchema = { ...schema, ...relations };
 
 let instance: ReturnType<typeof drizzle<typeof fullSchema>>;
+let rawPool: Pool | null = null;
 
 export function getDb() {
   if (!instance) {
-    const isPooler = env.databaseUrl.includes("pooler") || env.databaseUrl.includes("pgbouncer");
-
     const pool = new Pool({
       connectionString: env.databaseUrl,
       ssl: env.isProduction ? { rejectUnauthorized: false } : false,
-      // PgBouncer transaction pooler needs these settings
-      ...(isPooler
-        ? {
-            // Use session mode for DDL, or add prepareThreshold for transaction pooler
-            keepAlive: true,
-            connectionTimeoutMillis: 30000,
-            idleTimeoutMillis: 30000,
-          }
-        : {}),
+      // Disable prepared statements for PgBouncer compatibility
+      prepareThreshold: 0,
+      connectionTimeoutMillis: 30000,
+      idleTimeoutMillis: 30000,
     });
 
     instance = drizzle(pool, { schema: fullSchema });
+    rawPool = pool;
   }
   return instance;
+}
+
+export function getRawPool(): Pool {
+  if (!rawPool) {
+    getDb(); // initialize pool
+  }
+  return rawPool!;
 }

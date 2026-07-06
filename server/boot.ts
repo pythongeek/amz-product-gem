@@ -6,8 +6,7 @@ import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
 
-import { getDb } from "./queries/connection";
-import { sql } from "drizzle-orm";
+import { getRawPool } from "./queries/connection";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -16,25 +15,35 @@ app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 // Health check
 app.get("/api/health", (c) => c.json({ status: "ok", time: new Date().toISOString() }));
 
-// DB diagnostic — remove after fix
+// DB diagnostic — uses raw pg pool (no Drizzle prepared statements)
 app.get("/api/debug/db", async (c) => {
   try {
-    const db = getDb();
-    const result = await db.execute(sql`SELECT current_database(), current_user, version()`);
+    const pool = getRawPool();
+    const result = await pool.query("SELECT current_database(), current_user, version()");
     return c.json({ ok: true, dbInfo: result.rows[0] });
   } catch (err: any) {
-    return c.json({ ok: false, error: err.message, stack: err.stack }, 500);
+    // Redact password from connection string for safety
+    const redactedUrl = env.databaseUrl.replace(/:([^:@]+)@/, ":****@");
+    return c.json({
+      ok: false,
+      error: err.message,
+      code: err.code,
+      detail: err.detail,
+      hint: err.hint,
+      connectionString: redactedUrl,
+      ssl: env.isProduction,
+    }, 500);
   }
 });
 
-// Test admin table — remove after fix
+// Test admin table
 app.get("/api/debug/admin-table", async (c) => {
   try {
-    const db = getDb();
-    const result = await db.execute(sql`SELECT count(*) FROM admin_credentials`);
+    const pool = getRawPool();
+    const result = await pool.query("SELECT count(*) FROM admin_credentials");
     return c.json({ ok: true, count: result.rows[0] });
   } catch (err: any) {
-    return c.json({ ok: false, error: err.message, code: err.code }, 500);
+    return c.json({ ok: false, error: err.message, code: err.code, detail: err.detail }, 500);
   }
 });
 
