@@ -16,44 +16,52 @@ export const adminAuthRouter = createRouter({
       }),
     )
     .mutation(async ({ input }) => {
-      const db = getDb();
+      try {
+        const db = getDb();
+        const rows = await db
+          .select()
+          .from(adminCredentials)
+          .where(eq(adminCredentials.username, input.username))
+          .limit(1);
 
-      const rows = await db
-        .select()
-        .from(adminCredentials)
-        .where(eq(adminCredentials.username, input.username))
-        .limit(1);
+        const admin = rows.at(0);
+        if (!admin || !admin.isActive) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Invalid username or password",
+          });
+        }
 
-      const admin = rows.at(0);
-      if (!admin || !admin.isActive) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Invalid username or password",
-        });
-      }
+        const valid = await bcrypt.compare(input.password, admin.passwordHash);
+        if (!valid) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Invalid username or password",
+          });
+        }
 
-      const valid = await bcrypt.compare(input.password, admin.passwordHash);
-      if (!valid) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Invalid username or password",
-        });
-      }
-
-      const token = await signAdminToken({
-        adminId: admin.id,
-        username: admin.username,
-        role: "admin",
-      });
-
-      return {
-        token,
-        admin: {
-          id: admin.id,
+        const token = await signAdminToken({
+          adminId: admin.id,
           username: admin.username,
-          name: admin.name,
-        },
-      };
+          role: "admin",
+        });
+
+        return {
+          token,
+          admin: {
+            id: admin.id,
+            username: admin.username,
+            name: admin.name,
+          },
+        };
+      } catch (err: any) {
+        if (err instanceof TRPCError) throw err;
+        console.error("[admin.login] DB error:", err.message, err.code, err.stack);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `DB error: ${err.message || "Unknown"}`,
+        });
+      }
     }),
 
   me: publicQuery.query(async ({ ctx }) => {
