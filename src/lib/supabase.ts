@@ -2,21 +2,31 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 let _client: SupabaseClient | null = null;
 
+function getEnv(key: string, fallback?: string): string {
+  // Vite exposes vars prefixed with VITE_ to the browser
+  const value = import.meta.env[key];
+  if (value) return value;
+  if (fallback && import.meta.env[fallback]) return import.meta.env[fallback];
+  return "";
+}
+
 function getSupabaseUrl(): string {
-  const url = import.meta.env.VITE_SUPABASE_URL || "";
+  const url = getEnv("VITE_PUBLIC_SUPABASE_URL", "VITE_SUPABASE_URL");
   if (!url) {
     throw new Error(
-      "VITE_SUPABASE_URL is required. Please set it in your Vercel environment variables."
+      "VITE_PUBLIC_SUPABASE_URL (or VITE_SUPABASE_URL) is required. " +
+        "Please set it in your Vercel environment variables."
     );
   }
   return url;
 }
 
 function getSupabaseKey(): string {
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+  const key = getEnv("VITE_PUBLIC_SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON_KEY");
   if (!key) {
     throw new Error(
-      "VITE_SUPABASE_ANON_KEY is required. Please set it in your Vercel environment variables."
+      "VITE_PUBLIC_SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY) is required. " +
+        "Please set it in your Vercel environment variables."
     );
   }
   return key;
