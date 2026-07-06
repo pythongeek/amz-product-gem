@@ -4,6 +4,7 @@ import { createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
 import type { AppRouter } from "../../server/router";
 import { useState, type ReactNode } from "react";
+import { getAdminToken } from "@/lib/admin-auth";
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -32,6 +33,10 @@ export function TRPCProvider({ children }: { children: ReactNode }) {
           url: `${getBaseUrl()}/api/trpc`,
           transformer: superjson,
           headers() {
+            const adminToken = getAdminToken();
+            if (adminToken) {
+              return { Authorization: `Bearer ${adminToken}` };
+            }
             const token = localStorage.getItem("supabase_access_token");
             return {
               ...(token ? { Authorization: `Bearer ${token}` } : {}),

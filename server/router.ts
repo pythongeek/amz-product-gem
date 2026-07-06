@@ -1,4 +1,5 @@
 import { authRouter } from "./auth-router";
+import { adminAuthRouter } from "./admin-router";
 import { productRouter } from "./product-router";
 import { analysisRouter } from "./analysis-router";
 import { fbaRouter } from "./fba-router";
@@ -16,6 +17,7 @@ export const appRouter = createRouter({
   launch: launchRouter,
   dashboard: dashboardRouter,
   alert: alertRouter,
+  admin: adminAuthRouter,
 });
 
 export type AppRouter = typeof appRouter;

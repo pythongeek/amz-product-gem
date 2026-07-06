@@ -215,6 +215,17 @@ export const folders = pgTable("folders", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Admin Credentials (separate from OAuth users)
+export const adminCredentials = pgTable("admin_credentials", {
+  id: serial("id").primaryKey(),
+  username: varchar("username", { length: 100 }).notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  name: varchar("name", { length: 255 }),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -227,3 +238,5 @@ export type Alert = typeof alerts.$inferSelect;
 export type LaunchStrategy = typeof launchStrategies.$inferSelect;
 export type Activity = typeof activities.$inferSelect;
 export type Folder = typeof folders.$inferSelect;
+export type AdminCredential = typeof adminCredentials.$inferSelect;
+export type InsertAdminCredential = typeof adminCredentials.$inferInsert;

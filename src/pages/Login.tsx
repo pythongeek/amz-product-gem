@@ -1,20 +1,65 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Package, Github, Chrome, TrendingUp, Shield, Zap } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import {
+  Package,
+  Github,
+  Chrome,
+  TrendingUp,
+  Shield,
+  Zap,
+  Lock,
+  UserCircle,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { Link } from "react-router";
 
 export default function Login() {
-  const { isAuthenticated, isLoading, loginWithGitHub, loginWithGoogle } = useAuth();
+  const {
+    isAuthenticated,
+    isLoading,
+    loginWithGitHub,
+    loginWithGoogle,
+    loginAsAdmin,
+  } = useAuth();
   const navigate = useNavigate();
+
+  const [adminTab, setAdminTab] = useState(false);
+  const [adminUsername, setAdminUsername] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [adminError, setAdminError] = useState("");
+  const [adminLoading, setAdminLoading] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
       navigate("/dashboard");
     }
   }, [isAuthenticated, navigate]);
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminError("");
+    setAdminLoading(true);
+    try {
+      await loginAsAdmin(adminUsername, adminPassword);
+    } catch (err: any) {
+      setAdminError(err.message || "লগইন ব্যর্থ হয়েছে");
+    } finally {
+      setAdminLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -115,34 +160,116 @@ export default function Login() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 pt-6">
-              <Button
-                onClick={loginWithGitHub}
-                variant="outline"
-                className="w-full h-12 text-base font-medium border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
-              >
-                <Github className="h-5 w-5 mr-3" />
-                GitHub দিয়ে লগইন
-              </Button>
-
-              <Button
-                onClick={loginWithGoogle}
-                variant="outline"
-                className="w-full h-12 text-base font-medium border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
-              >
-                <Chrome className="h-5 w-5 mr-3 text-red-500" />
-                Google দিয়ে লগইন
-              </Button>
-
-              <div className="relative py-2">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-slate-200 dark:border-slate-700" />
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="bg-white dark:bg-slate-800 px-4 text-slate-400">
-                    অথবা
-                  </span>
-                </div>
+              {/* Tab Switcher */}
+              <div className="flex rounded-lg bg-slate-100 dark:bg-slate-700 p-1">
+                <button
+                  type="button"
+                  onClick={() => setAdminTab(false)}
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                    !adminTab
+                      ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
+                  ব্যবহারকারী
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminTab(true);
+                    setAdminError("");
+                  }}
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                    adminTab
+                      ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
+                  অ্যাডমিন
+                </button>
               </div>
+
+              {!adminTab ? (
+                <>
+                  <Button
+                    onClick={loginWithGitHub}
+                    variant="outline"
+                    className="w-full h-12 text-base font-medium border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+                  >
+                    <Github className="h-5 w-5 mr-3" />
+                    GitHub দিয়ে লগইন
+                  </Button>
+
+                  <Button
+                    onClick={loginWithGoogle}
+                    variant="outline"
+                    className="w-full h-12 text-base font-medium border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+                  >
+                    <Chrome className="h-5 w-5 mr-3 text-red-500" />
+                    Google দিয়ে লগইন
+                  </Button>
+                </>
+              ) : (
+                <form onSubmit={handleAdminLogin} className="space-y-4">
+                  <div>
+                    <Label className="flex items-center gap-2 mb-2 text-sm">
+                      <UserCircle className="h-4 w-4 text-slate-400" />
+                      ইউজারনেম
+                    </Label>
+                    <Input
+                      value={adminUsername}
+                      onChange={(e) => setAdminUsername(e.target.value)}
+                      placeholder="admin"
+                      className="h-12 rounded-xl"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label className="flex items-center gap-2 mb-2 text-sm">
+                      <Lock className="h-4 w-4 text-slate-400" />
+                      পাসওয়ার্ড
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="h-12 rounded-xl pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  {adminError && (
+                    <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
+                      {adminError}
+                    </p>
+                  )}
+                  <Button
+                    type="submit"
+                    disabled={adminLoading}
+                    className="w-full h-12 text-base font-medium bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black"
+                  >
+                    {adminLoading ? (
+                      <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    ) : (
+                      <Shield className="h-5 w-5 mr-2" />
+                    )}
+                    অ্যাডমিন লগইন
+                  </Button>
+                </form>
+              )}
 
               <div className="text-center text-sm text-slate-500 dark:text-slate-400 space-y-2">
                 <p>

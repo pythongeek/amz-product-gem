@@ -1,0 +1,110 @@
+import { z } from "zod";
+import { createRouter, publicQuery } from "./middleware";
+import { getDb } from "./queries/connection";
+import { adminCredentials } from "@db/schema";
+import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
+import { signAdminToken, verifyAdminToken } from "./lib/admin-auth";
+import { TRPCError } from "@trpc/server";
+
+export const adminAuthRouter = createRouter({
+  login: publicQuery
+    .input(
+      z.object({
+        username: z.string().min(1, "Username is required"),
+        password: z.string().min(1, "Password is required"),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const db = getDb();
+
+      const rows = await db
+        .select()
+        .from(adminCredentials)
+        .where(eq(adminCredentials.username, input.username))
+        .limit(1);
+
+      const admin = rows.at(0);
+      if (!admin || !admin.isActive) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Invalid username or password",
+        });
+      }
+
+      const valid = await bcrypt.compare(input.password, admin.passwordHash);
+      if (!valid) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Invalid username or password",
+        });
+      }
+
+      const token = await signAdminToken({
+        adminId: admin.id,
+        username: admin.username,
+        role: "admin",
+      });
+
+      return {
+        token,
+        admin: {
+          id: admin.id,
+          username: admin.username,
+          name: admin.name,
+        },
+      };
+    }),
+
+  me: publicQuery.query(async ({ ctx }) => {
+    const authHeader = ctx.req.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return null;
+    }
+
+    const token = authHeader.substring(7);
+    const payload = await verifyAdminToken(token);
+    if (!payload) return null;
+
+    const db = getDb();
+    const rows = await db
+      .select()
+      .from(adminCredentials)
+      .where(eq(adminCredentials.id, payload.adminId))
+      .limit(1);
+
+    const admin = rows.at(0);
+    if (!admin || !admin.isActive) return null;
+
+    return {
+      id: admin.id,
+      username: admin.username,
+      name: admin.name,
+      role: "admin" as const,
+    };
+  }),
+
+  // Seed endpoint — creates default admin if none exists (public, idempotent)
+  ensureDefaultAdmin: publicQuery.mutation(async () => {
+    const db = getDb();
+
+    const existing = await db
+      .select()
+      .from(adminCredentials)
+      .limit(1);
+
+    if (existing.length > 0) {
+      return { created: false, message: "Admin already exists" };
+    }
+
+    const hash = await bcrypt.hash("admin123", 12);
+    await db.insert(adminCredentials).values({
+      username: "admin",
+      passwordHash: hash,
+      name: "System Administrator",
+      isActive: true,
+    });
+
+    return { created: true, message: "Default admin created: username=admin, password=admin123" };
+  }),
+});
