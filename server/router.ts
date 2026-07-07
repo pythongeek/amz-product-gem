@@ -6,6 +6,7 @@ import { fbaRouter } from "./fba-router";
 import { launchRouter } from "./launch-router";
 import { dashboardRouter } from "./dashboard-router";
 import { alertRouter } from "./alert-router";
+import { jobRouter } from "./jobRouter";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -18,6 +19,7 @@ export const appRouter = createRouter({
   dashboard: dashboardRouter,
   alert: alertRouter,
   admin: adminAuthRouter,
+  job: jobRouter,
 });
 
 export type AppRouter = typeof appRouter;

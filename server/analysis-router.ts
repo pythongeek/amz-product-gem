@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
-import { callAI, BANGLA_SYSTEM_PROMPT } from "./lib/kimi";
+import { callAIWithFallback as callAI, BANGLA_SYSTEM_PROMPT } from "./lib/ai";
 import { getDb } from "./queries/connection";
 import { productScores } from "@db/schema";
 

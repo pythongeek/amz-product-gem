@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { createRouter, authedQuery, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { alerts, products, activities } from "@db/schema";
-import { eq, desc } from "drizzle-orm";
+import { alerts, products, activities, cronState } from "@db/schema";
+import { eq, desc, sql } from "drizzle-orm";
+
+const BATCH_SIZE = 10; // Process 10 products per cron run
 
 export const alertRouter = createRouter({
   list: authedQuery.query(async ({ ctx }) => {
@@ -46,31 +48,53 @@ export const alertRouter = createRouter({
       }
 
       const db = getDb();
-      const allProducts = await db.select().from(products);
+      const batchSize = parseInt(process.env.CRON_BATCH_SIZE || "10");
 
-      const newAlerts = [];
+      // Get current cursor from cron_state table
+      const cursorResult = await db
+        .select()
+        .from(cronState)
+        .where(eq(cronState.key, "product_analysis_cursor"))
+        .limit(1);
 
-      for (const product of allProducts) {
+      const cursor = cursorResult[0]?.value || "0";
+      let processedCount = 0;
+      let newAlertsCount = 0;
+
+      // Process products in batches
+      const productsToProcess = await db
+        .select()
+        .from(products)
+        .orderBy(sql`id ASC`)
+        .limit(batchSize)
+        .offset(parseInt(cursor));
+
+      for (const product of productsToProcess) {
+        processedCount++;
+
+        // Use AI to detect actual changes (mock data for now)
+        // In production, this would compare historical data and use AI for analysis
         const mockChanges = Math.random() > 0.7;
 
         if (mockChanges) {
-          const alertType = ["price_drop", "bsr_change", "new_review"][
-            Math.floor(Math.random() * 3)
-          ];
+          const alertType: "price_drop" | "bsr_change" | "new_review" =
+            ["price_drop", "bsr_change", "new_review"][
+              Math.floor(Math.random() * 3)
+            ];
 
           const alert = await db
             .insert(alerts)
             .values({
               productId: product.id,
               userId: product.userId,
-              alertType: alertType as "price_drop" | "bsr_change" | "new_review",
+              alertType,
               oldValue: String(Math.floor(Math.random() * 100)),
               newValue: String(Math.floor(Math.random() * 100)),
               message: getAlertMessage(alertType, product.title || "Unknown"),
             })
             .returning();
 
-          newAlerts.push(alert[0]);
+          newAlertsCount++;
 
           await db.insert(activities).values({
             userId: product.userId,
@@ -82,9 +106,26 @@ export const alertRouter = createRouter({
         }
       }
 
+      // Update cursor to next position
+      const nextCursor = (parseInt(cursor) + processedCount).toString();
+      await db
+        .update(cronState)
+        .set({ value: nextCursor, updatedAt: new Date() })
+        .where(eq(cronState.key, "product_analysis_cursor"));
+
+      // Check if we've processed all products
+      const totalProducts = await db.select({ count: sql<number>`count(*)` }).from(products);
+      const allProcessed = nextCursor >= totalProducts[0].count;
+
       return {
-        checked: allProducts.length,
-        newAlerts: newAlerts.length,
+        checked: processedCount,
+        totalChecked: allProducts.length,
+        newAlerts: newAlertsCount,
+        allProcessed,
+        nextCursor,
+        message: allProcessed
+          ? "All products processed"
+          : `Processed ${processedCount} products. ${totalProducts[0].count - nextCursor} products remaining.`,
       };
     }),
 });

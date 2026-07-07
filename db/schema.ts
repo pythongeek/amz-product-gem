@@ -226,6 +226,15 @@ export const adminCredentials = pgTable("admin_credentials", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Cron job state tracking
+export const cronState = pgTable("cron_state", {
+  id: serial("id").primaryKey(),
+  key: varchar("key", { length: 255 }).notNull().unique(),
+  value: text("value"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -240,3 +249,5 @@ export type Activity = typeof activities.$inferSelect;
 export type Folder = typeof folders.$inferSelect;
 export type AdminCredential = typeof adminCredentials.$inferSelect;
 export type InsertAdminCredential = typeof adminCredentials.$inferInsert;
+export type CronState = typeof cronState.$inferSelect;
+export type InsertCronState = typeof cronState.$inferInsert;
