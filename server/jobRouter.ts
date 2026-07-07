@@ -2,9 +2,10 @@ import { createRouter, authedQuery } from "./middleware";
 import { z } from "zod";
 import { callAIWithFallback, BANGLA_SYSTEM_PROMPT } from "./ai";
 import { getDb } from "./queries/connection";
-import { productScores } from "@db/schema";
+import { reports } from "@db/schema";
 
 export const jobRouter = createRouter({
+  // Background product analysis (existing)
   runAnalysisJob: authedQuery
     .input(
       z.object({
@@ -15,7 +16,6 @@ export const jobRouter = createRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      // 1️⃣ Build prompt & mock data (same as in analyzeProduct)
       const mockData = {
         price: (Math.random() * 40 + 10).toFixed(2),
         rating: (Math.random() * 2 + 3).toFixed(1),
@@ -53,7 +53,6 @@ export const jobRouter = createRouter({
         { role: "user", content: prompt },
       ]);
 
-      // 2️⃣ Compute scores (same logic as validateProduct)
       const scores = {
         priceScore: calculatePriceScore(Number(mockData.price)),
         sizeWeightScore: 8,
@@ -78,17 +77,52 @@ export const jobRouter = createRouter({
           ? "সতর্কতা (CAUTION) — ঝুঁকি আছে"
           : "বর্জন (FAIL) — এড়িয়ে চলুন";
 
-      // 3️⃣ Persist result
       const db = getDb();
-      await db.insert(productScores).values({
+      await db.insert(reports).values({
         productId: input.productId,
         userId: ctx.user.id,
-        ...scores,
-        totalScore: total,
-        grade,
-        recommendation,
-        analysisData: { ...mockData, calculatedAt: new Date().toISOString() },
-        rawAnalysis: analysis, // store full Bangla text if you like
+        title: input.title,
+        content: analysis,
+        summary: analysis.substring(0, 500) + "...",
+        marketAnalysis: analysis,
+        competitionAnalysis: analysis,
+        profitAnalysis: analysis,
+        riskAnalysis: analysis,
+        recommendation: recommendation,
+        language: "bn",
+      });
+
+      return { success: true };
+    }),
+
+  // Immediate research trigger (new)
+  triggerResearch: authedQuery
+    .input(
+      z.object({
+        input: z.string(),
+        userId: z.number(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const prompt = `Conduct immediate research on: ${input.input}. Provide a concise report in Bangla.`;
+      const research = await callAIWithFallback([
+        { role: "system", content: BANGLA_SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ]);
+
+      const db = getDb();
+      await db.insert(reports).values({
+        productId: null,
+        userId: input.userId,
+        title: input.input,
+        content: research,
+        summary: research.substring(0, 500) + "...",
+        marketAnalysis: research,
+        competitionAnalysis: research,
+        profitAnalysis: research,
+        riskAnalysis: research,
+        recommendation: "Pending",
+        language: "bn",
       });
 
       return { success: true };
