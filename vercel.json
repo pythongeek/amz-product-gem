@@ -15,10 +15,7 @@
     }
   ],
   "functions": {
-    "server/**/*.ts": {
-      "maxDuration": 300
-    },
-    "api/**/*.ts": {
+    "api/index.ts": {
       "maxDuration": 300
     }
   }

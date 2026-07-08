@@ -28,6 +28,12 @@ export const alertTypeEnum = pgEnum("alert_type", [
   "new_competitor",
   "stockout",
 ]);
+export const researchJobStatusEnum = pgEnum("research_job_status", [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+]);
 
 // Users table (synced with Supabase Auth)
 export const users = pgTable("users", {
@@ -234,6 +240,21 @@ export const cronState = pgTable("cron_state", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Research Jobs Queue — for async AI processing (bypasses Vercel 8s timeout)
+export const researchJobs = pgTable("research_jobs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  input: text("input").notNull(), // URL or keyword
+  inputType: varchar("input_type", { length: 20 }).notNull(), // "url" | "keyword"
+  marketplace: varchar("marketplace", { length: 10 }).default("US"),
+  status: researchJobStatusEnum("status").default("pending").notNull(),
+  result: text("result"), // AI-generated report
+  scores: jsonb("scores"), // 13-point validation scores
+  error: text("error"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 
 // Type exports
 export type User = typeof users.$inferSelect;
@@ -251,3 +272,5 @@ export type AdminCredential = typeof adminCredentials.$inferSelect;
 export type InsertAdminCredential = typeof adminCredentials.$inferInsert;
 export type CronState = typeof cronState.$inferSelect;
 export type InsertCronState = typeof cronState.$inferInsert;
+export type ResearchJob = typeof researchJobs.$inferSelect;
+export type InsertResearchJob = typeof researchJobs.$inferInsert;

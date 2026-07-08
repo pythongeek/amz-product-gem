@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
-import { callAIWithFallback as callAI, BANGLA_SYSTEM_PROMPT } from "./lib/ai";
+import { callAIWithFallback, BANGLA_SYSTEM_PROMPT } from "./lib/ai";
 import { getDb } from "./queries/connection";
-import { productScores } from "@db/schema";
+import { productScores, researchJobs } from "@db/schema";
 
 function generateMockProductData(_title: string) {
   return {
@@ -18,6 +18,7 @@ function generateMockProductData(_title: string) {
 }
 
 export const analysisRouter = createRouter({
+  // ── Analyze Product (queue-based to bypass 8s timeout) ──
   analyzeProduct: authedQuery
     .input(
       z.object({
@@ -27,44 +28,28 @@ export const analysisRouter = createRouter({
         productUrl: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
-      const mockData = generateMockProductData(input.title);
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
 
-      const discoveryPrompt = `আপনি একজন Amazon FBA বিশেষজ্ঞ। "${input.title}" প্রোডাক্টটি বিশ্লেষণ করুন।
-      
-এই তথ্যগুলো ব্যবহার করুন:
-- ASIN: ${input.asin}
-- বাজার: ${input.marketplace}
-- প্রাইজ: $${mockData.price}
-- রেটিং: ${mockData.rating}/5 (${mockData.reviewCount} রিভিউ)
-- BSR: #${mockData.bsr}
-- সেলার সংখ্যা: ${mockData.sellerCount} (FBA: ${mockData.fbaSellers})
-- বিক্রির পরিমাণ: ~${mockData.salesEstimate}/মাস
-
-বাংলায় এই ফরম্যাটে উত্তর দিন:
-১. প্রোডাক্ট সারাংশ
-২. মার্কেট ডিমান্ড (চাহিদা বিশ্লেষণ)
-৩. প্রতিযোগিতা পর্যালোচনা
-৪. প্রাইজ অ্যানালাইসিস
-৫. সেলস ভেলোসিটি
-৬. লাভের সম্ভাবনা
-৭. ঝুঁকি বিষয়
-৮. সুপারিশ (PASS/CAUTION/FAIL)`;
-
-      const analysis = await callAI([
-        { role: "system", content: BANGLA_SYSTEM_PROMPT },
-        { role: "user", content: discoveryPrompt },
-      ]);
+      // Queue the job instead of doing it inline
+      const [job] = await db
+        .insert(researchJobs)
+        .values({
+          userId: ctx.user.id,
+          input: input.productUrl || input.title,
+          inputType: input.productUrl ? "url" : "keyword",
+          marketplace: input.marketplace,
+          status: "pending",
+        })
+        .returning();
 
       return {
-        analysis,
-        mockData,
-        title: input.title,
-        asin: input.asin,
-        marketplace: input.marketplace,
+        jobId: job.id,
+        message: "Analysis queued. Check status with job.getJobStatus",
       };
     }),
 
+  // ── Legacy: Validate Product ──
   validateProduct: authedQuery
     .input(
       z.object({
@@ -131,6 +116,7 @@ export const analysisRouter = createRouter({
       };
     }),
 
+  // ── Generate Report ──
   generateReport: authedQuery
     .input(
       z.object({
@@ -164,7 +150,7 @@ ${input.analysis}
 
 ব্যবসায়িক টার্মগুলোর বাংলা অনুবাদ বন্ধনীতে দিন। টেবিল ও বুলেট পয়েন্ট ব্যবহার করুন।`;
 
-      const report = await callAI([
+      const report = await callAIWithFallback([
         { role: "system", content: BANGLA_SYSTEM_PROMPT },
         { role: "user", content: reportPrompt },
       ]);
@@ -172,6 +158,7 @@ ${input.analysis}
       return { report };
     }),
 
+  // ── Get Trends (mock data for now) ──
   getTrends: authedQuery
     .input(z.object({ keyword: z.string() }))
     .query(async ({ input }) => {
@@ -202,21 +189,18 @@ function calculatePriceScore(price: number): number {
   if (price > 50 && price <= 80) return 5;
   return 3;
 }
-
 function calculateMarketSizeScore(bsr: number): number {
   if (bsr < 5000) return 9;
   if (bsr < 20000) return 8;
   if (bsr < 50000) return 6;
   return 4;
 }
-
 function calculateReviewBarrierScore(reviewCount: number): number {
   if (reviewCount < 50) return 10;
   if (reviewCount < 150) return 8;
   if (reviewCount < 500) return 5;
   return 3;
 }
-
 function calculateComplexityScore(data: {
   hasBattery?: boolean;
   isElectronic?: boolean;
@@ -228,14 +212,12 @@ function calculateComplexityScore(data: {
   if (data.isFragile) score -= 2;
   return Math.max(score, 2);
 }
-
 function calculateBrandDominanceScore(sellerCount: number): number {
   if (sellerCount > 15) return 7;
   if (sellerCount > 10) return 6;
   if (sellerCount > 5) return 4;
   return 3;
 }
-
 function calculateMarginScore(price: number): number {
   if (price >= 25 && price <= 50) return 9;
   if (price >= 15 && price <= 80) return 7;

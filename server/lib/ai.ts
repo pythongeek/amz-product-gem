@@ -1,103 +1,148 @@
-import { callAI as callKimi, BANGLA_SYSTEM_PROMPT as KIMI_BANGLA_SYSTEM_PROMPT } from "./kimi";
 import { env } from "./env";
 
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+interface ChatCompletionResponse {
+  choices: Array<{
+    message: {
+      content: string;
+    };
+  }>;
+}
+
 /**
- * Minimax wrapper – same shape as kimi.callAI
- * Uses the same OpenAI-compatible schema Minimax exposes.
+ * Call Kimi Code API (or any OpenAI-compatible provider)
+ * For Kimi Code: use model "moonshot-v1-32k" or "moonshot-v1-8k" for code tasks
+ * For long-form research: use "moonshot-v1-128k" (default)
  */
-export async function callMinimax(
-  messages: { role: "system" | "user" | "assistant"; content: string }[],
+async function callKimi(
+  messages: ChatMessage[],
+  temperature = 0.7
+): Promise<string> {
+  if (!env.aiApiKey) {
+    throw new Error(
+      "AI_API_KEY (or KIMI_API_KEY) not set. Add it to Vercel environment variables."
+    );
+  }
+
+  const response = await fetch(`${env.aiBaseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.aiApiKey}`,
+    },
+    body: JSON.stringify({
+      model: env.aiModel,
+      messages,
+      temperature,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Kimi API error (${response.status}): ${error}`);
+  }
+
+  const data = (await response.json()) as ChatCompletionResponse;
+  return data.choices[0]?.message?.content || "";
+}
+
+/**
+ * Call MiniMax API (fallback)
+ */
+async function callMinimax(
+  messages: ChatMessage[],
   temperature = 0.7
 ): Promise<string> {
   if (!env.minimaxApiKey) {
     throw new Error("MINIMAX_API_KEY not set");
   }
 
-  const base = env.minimaxBaseUrl ?? "https://api.minimax.chat/v1";
-
-  const resp = await fetch(`${base}/chat/completions`, {
+  const response = await fetch(`${env.minimaxBaseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.minimaxApiKey}`,
     },
     body: JSON.stringify({
-      model: env.minimaxModel ?? "abab6.5s-chat",
+      model: env.minimaxModel,
       messages,
       temperature,
     }),
   });
 
-  if (!resp.ok) {
-    const txt = await resp.text();
-    throw new Error(`Minimax error ${resp.status}: ${txt}`);
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Minimax API error (${response.status}): ${error}`);
   }
 
-  const data = (await resp.json()) as {
-    choices: Array<{ message: { content: string } }>;
-  };
-  return data.choices[0]?.message?.content ?? "";
+  const data = (await response.json()) as ChatCompletionResponse;
+  return data.choices[0]?.message?.content || "";
 }
 
 /**
- * Try Kimi first, fall back to Minimax on any error (network, 429, 5xx, etc.).
+ * Try Kimi first, fall back to Minimax on any error.
  */
 export async function callAIWithFallback(
-  messages: { role: "system" | "user" | "assistant"; content: string }[],
+  messages: ChatMessage[],
   temperature = 0.7
 ): Promise<string> {
   try {
     return await callKimi(messages, temperature);
   } catch (kimErr: any) {
-    // Log but don’t expose internal details to the user
     console.warn("[AI] Kimi failed, trying Minimax fallback:", kimErr.message);
     try {
       return await callMinimax(messages, temperature);
     } catch (mmErr: any) {
       console.error("[AI] Both Kimi and Minimax failed:", mmErr.message);
-      // Re-throw a generic error so the API layer can return a 502/504 nicely
-      throw new Error("AI service temporarily unavailable");
+      throw new Error(`AI service temporarily unavailable. Kimi: ${kimErr.message}. Minimax: ${mmErr.message}`);
     }
   }
 }
 
+/**
+ * Streaming generator — yields text chunks as they arrive.
+ * Falls back from Kimi → Minimax automatically.
+ */
 export async function* callAIStream(
-  messages: { role: "system" | "user" | "assistant"; content: string }[],
+  messages: ChatMessage[],
   temperature = 0.7
 ): AsyncGenerator<string, void, unknown> {
-  // Try Kimi stream
+  // Try Kimi stream first
   try {
-    yield* await streamFromProvider(
+    yield* streamFromProvider(
       "kimi",
-      env.aiBaseUrl ?? "https://api.moonshot.cn/v1", // Use aiBaseUrl for Kimi
-      env.aiApiKey, // Use aiApiKey for Kimi
-      env.aiModel ?? "moonshot-v1-128k", // Use aiModel for Kimi
+      env.aiBaseUrl,
+      env.aiApiKey,
+      env.aiModel,
       messages,
       temperature
     );
-    return; // success
+    return;
   } catch (e: any) {
     console.warn("[AI] Kimi stream failed, trying Minimax:", e.message);
   }
 
   // Fallback to Minimax stream
-  yield* await streamFromProvider(
+  yield* streamFromProvider(
     "minimax",
-    env.minimaxBaseUrl ?? "https://api.minimax.chat/v1",
+    env.minimaxBaseUrl,
     env.minimaxApiKey,
-    env.minimaxModel ?? "abab6.5s-chat",
+    env.minimaxModel,
     messages,
     temperature
   );
 }
 
-// Generic SSE helper
 async function* streamFromProvider(
   name: string,
   baseUrl: string,
   apiKey: string,
   model: string,
-  messages: any[],
+  messages: ChatMessage[],
   temperature: number
 ): AsyncGenerator<string> {
   if (!apiKey) {
@@ -114,7 +159,7 @@ async function* streamFromProvider(
       model,
       messages,
       temperature,
-      stream: true, // <-- important
+      stream: true,
     }),
   });
 
@@ -134,9 +179,8 @@ async function* streamFromProvider(
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      // Split by "\n\n" (SSE event boundary)
-      let lines = buffer.split("\n\n");
-      buffer = lines.pop() ?? ""; // keep incomplete tail
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() ?? "";
       for (const line of lines) {
         if (!line.trim()) continue;
         if (line.startsWith("data: ")) {
@@ -157,4 +201,8 @@ async function* streamFromProvider(
   }
 }
 
-export const BANGLA_SYSTEM_PROMPT = KIMI_BANGLA_SYSTEM_PROMPT;
+export const BANGLA_SYSTEM_PROMPT = `আপনি একজন বিশেষজ্ঞ Amazon FBA পরামর্শদাতা যিনি বাংলাদেশি উদ্যোক্তাদের জন্য লিখছেন।
+সব বিষয় স্পষ্ট, সহজ বাংলায় ব্যাখ্যা করুন।
+টেকনিক্যাল Amazon শর্তগুলো ইংরেজিতে রাখুন কিন্তু বাংলায় ব্যাখ্যা দিন।
+বুলেট পয়েন্ট, টেবিল, এবং ইমোজি ব্যবহার করুন পড়ার সুবিধার জন্য।
+অতিরিক্ত জটিল বাক্য এড়িয়ে চলুন।`;

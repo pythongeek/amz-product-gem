@@ -28,19 +28,19 @@ export const env = {
     process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   supabaseAnonKey:
     process.env.SUPABASE_ANON_KEY || process.env.VITE_PUBLIC_SUPABASE_ANON_KEY || "",
-  // AI API (Primary - Kimi/OpenAI-compatible)
+  // AI API (Primary - Kimi Code / OpenAI-compatible)
   aiApiKey: process.env.AI_API_KEY || process.env.KIMI_API_KEY || process.env.OPENAI_API_KEY || "",
   aiBaseUrl: process.env.AI_BASE_URL || process.env.KIMI_BASE_URL || "https://api.moonshot.cn/v1",
   aiModel: process.env.AI_MODEL || process.env.KIMI_MODEL || "moonshot-v1-128k",
   // AI API (Fallback - MiniMax)
-  aiFallbackApiKey: process.env.AI_FALLBACK_API_KEY || process.env.MINIMAX_API_KEY || "",
-  aiFallbackBaseUrl: process.env.AI_FALLBACK_BASE_URL || process.env.MINIMAX_BASE_URL || "https://api.minimax.io/v1",
-  aiFallbackModel: process.env.AI_FALLBACK_MODEL || "abab6.5s-chat",
+  minimaxApiKey: process.env.MINIMAX_API_KEY || "",
+  minimaxBaseUrl: process.env.MINIMAX_BASE_URL || "https://api.minimax.chat/v1",
+  minimaxModel: process.env.MINIMAX_MODEL || "abab6.5s-chat",
+  // Cron-jobs.org
+  cronJobsOrgApiKey: process.env.CRON_JOBS_ORG_API_KEY || "",
+  cronSecret: process.env.CRON_SECRET || "",
   jwtSecret: process.env.JWT_SECRET ?? "fba-research-secret-key-change-in-production",
   kimiAuthUrl: process.env.KIMI_AUTH_URL ?? "https://auth.kimi.com",
   kimiOpenUrl: process.env.KIMI_OPEN_URL ?? "https://open.kimi.com",
   ownerUnionId: process.env.OWNER_UNION_ID ?? "",
-  minimaxApiKey: process.env.MINIMAX_API_KEY ?? "",
-  minimaxBaseUrl: process.env.MINIMAX_BASE_URL ?? "",
-  minimaxModel: process.env.MINIMAX_MODEL ?? "abab6.5s-chat",
 };

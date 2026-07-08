@@ -8,6 +8,7 @@ import {
   alerts,
   launchStrategies,
   folders,
+  researchJobs,
 } from "./schema";
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -16,6 +17,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   alerts: many(alerts),
   launchStrategies: many(launchStrategies),
   folders: many(folders),
+  researchJobs: many(researchJobs),
 }));
 
 export const productsRelations = relations(products, ({ one, many }) => ({
@@ -61,4 +63,8 @@ export const launchStrategiesRelations = relations(launchStrategies, ({ one }) =
 
 export const foldersRelations = relations(folders, ({ one }) => ({
   user: one(users, { fields: [folders.userId], references: [users.id] }),
+}));
+
+export const researchJobsRelations = relations(researchJobs, ({ one }) => ({
+  user: one(users, { fields: [researchJobs.userId], references: [users.id] }),
 }));

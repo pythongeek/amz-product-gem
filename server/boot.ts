@@ -5,6 +5,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
+import cronRouter from "./cron-router";
 
 import { getRawPool } from "./queries/connection";
 
@@ -15,28 +16,16 @@ app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 // Health check
 app.get("/api/health", (c) => c.json({ status: "ok", time: new Date().toISOString() }));
 
-// DB diagnostic — shows resolved connection string and tests raw query
+// DB diagnostic
 app.get("/api/debug/db", async (c) => {
   try {
     const pool = getRawPool();
     const result = await pool.query("SELECT current_database(), current_user, version()");
     const redactedUrl = env.databaseUrl.replace(/:([^:@]+)@/, ":****@");
-    return c.json({
-      ok: true,
-      dbInfo: result.rows[0],
-      connectionString: redactedUrl,
-    });
+    return c.json({ ok: true, dbInfo: result.rows[0], connectionString: redactedUrl });
   } catch (err: any) {
     const redactedUrl = env.databaseUrl.replace(/:([^:@]+)@/, ":****@");
-    return c.json({
-      ok: false,
-      error: err.message,
-      code: err.code,
-      detail: err.detail,
-      hint: err.hint,
-      connectionString: redactedUrl,
-      ssl: env.isProduction,
-    }, 500);
+    return c.json({ ok: false, error: err.message, code: err.code, connectionString: redactedUrl }, 500);
   }
 });
 
@@ -47,26 +36,16 @@ app.get("/api/debug/admin-table", async (c) => {
     const result = await pool.query("SELECT count(*) FROM admin_credentials");
     return c.json({ ok: true, count: result.rows[0] });
   } catch (err: any) {
-    return c.json({ ok: false, error: err.message, code: err.code, detail: err.detail }, 500);
+    return c.json({ ok: false, error: err.message, code: err.code }, 500);
   }
 });
 
-// Cron webhook endpoint for cron-jobs.org
-app.post("/api/cron/monitor", async (c) => {
-  const cronSecret = c.req.header("x-cron-secret");
-  if (cronSecret !== process.env.CRON_SECRET) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
+// ── PUBLIC CRON ENDPOINTS (called by cron-jobs.org) ──
+// These bypass Vercel's 8s HTTP timeout because cron-jobs.org calls them
+// from outside Vercel's gateway, and vercel.json sets maxDuration: 300s.
+app.route("/api/cron", cronRouter);
 
-  const result = await appRouter.createCaller({
-    req: c.req.raw,
-    resHeaders: new Headers(),
-  }).alert.checkChanges({ cronSecret: cronSecret || "" });
-
-  return c.json(result);
-});
-
-// tRPC handler
+// ── tRPC handler ──
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({
     endpoint: "/api/trpc",
