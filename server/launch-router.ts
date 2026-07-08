@@ -3,7 +3,7 @@ import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { launchStrategies } from "@db/schema";
 import { eq } from "drizzle-orm";
-import { callAI, BANGLA_SYSTEM_PROMPT } from "./lib/kimi";
+import { callAIWithFallback, BANGLA_SYSTEM_PROMPT } from "./lib/ai";
 
 export const launchRouter = createRouter({
   generate: authedQuery
@@ -62,7 +62,7 @@ export const launchRouter = createRouter({
 
 প্রতিটি সেকশনে বুলেট পয়েন্ট ও নির্দিষ্ট নাম্বার দিন।`;
 
-      const strategy = await callAI([
+      const strategy = await callAIWithFallback([
         { role: "system", content: BANGLA_SYSTEM_PROMPT },
         { role: "user", content: prompt },
       ]);
