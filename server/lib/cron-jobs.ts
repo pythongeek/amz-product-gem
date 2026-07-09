@@ -5,6 +5,7 @@ const BASE = "https://api.cron-job.org";
 interface CronJobInput {
   title: string;
   url: string;
+  enabled?: boolean;
   schedule: { timezone: string; expiresAt: number; hours: number[]; mdays: number[]; minutes: number[]; months: number[]; wdays: number[] };
   requestMethod: number; // 0=GET, 1=POST, 2=PUT, 3=PATCH, 4=DELETE
   extendedData?: {
@@ -119,6 +120,7 @@ export async function setupCronJobs(baseUrl: string): Promise<{ created: number;
   const researchJob = await createCronJob({
     title: "AMZ-ProcessPendingResearch",
     url: `${baseUrl}/api/cron/process-research`,
+    enabled: true,
     schedule: every5Minutes,
     requestMethod: 1, // POST
     extendedData: {
@@ -133,6 +135,7 @@ export async function setupCronJobs(baseUrl: string): Promise<{ created: number;
   const alertJob = await createCronJob({
     title: "AMZ-CheckAlerts",
     url: `${baseUrl}/api/cron/check-alerts`,
+    enabled: true,
     schedule: every2Hours,
     requestMethod: 1, // POST
     extendedData: {
