@@ -30,22 +30,34 @@ export async function createContext(
     const adminPayload = await verifyAdminToken(token);
     if (adminPayload) {
       ctx.admin = adminPayload;
-      // Create a synthetic User object so adminQuery middleware works
-      ctx.user = {
-        id: -adminPayload.adminId, // negative to avoid collision with real users
-        supabaseUid: `admin:${adminPayload.adminId}`,
-        email: adminPayload.username,
-        name: adminPayload.username,
-        avatar: null,
-        role: "admin",
-        experienceLevel: null,
-        budgetRange: null,
-        preferredSourcing: null,
-        targetMargin: null,
-        localArea: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as User;
+      const db = getDb();
+      const adminSupabaseUid = `admin:${adminPayload.adminId}`;
+      
+      // Look up or create admin user in users table (needed for FK constraints)
+      const existingAdminUsers = await db
+        .select()
+        .from(users)
+        .where(eq(users.supabaseUid, adminSupabaseUid))
+        .limit(1);
+
+      if (existingAdminUsers.length > 0) {
+        ctx.user = existingAdminUsers[0];
+      } else {
+        // Create admin user in users table so FK constraints work
+        const newAdminUser = await db
+          .insert(users)
+          .values({
+            supabaseUid: adminSupabaseUid,
+            email: adminPayload.username,
+            name: adminPayload.username,
+            role: "admin",
+          })
+          .returning();
+        
+        if (newAdminUser.length > 0) {
+          ctx.user = newAdminUser[0];
+        }
+      }
       return ctx;
     }
 

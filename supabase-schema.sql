@@ -282,6 +282,13 @@ CREATE INDEX IF NOT EXISTS idx_launch_product_id ON launch_strategies(product_id
 -- INSERT DEFAULT ADMIN USER
 -- Username: admin | Password: admin123
 -- ============================================================
+
+-- Insert admin into users table first (needed for FK constraints)
+INSERT INTO users (supabase_uid, email, name, role)
+VALUES ('admin:1', 'admin', 'admin', 'admin')
+ON CONFLICT (supabase_uid) DO NOTHING;
+
+-- Insert admin credentials
 INSERT INTO admin_credentials (username, password_hash, name, is_active)
 VALUES (
   'admin',
