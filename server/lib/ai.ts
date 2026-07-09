@@ -10,7 +10,8 @@ export interface ChatMessage {
 function detectFormat(): "openai" | "claude" {
   if (env.aiFormat) return env.aiFormat;
   const url = env.aiBaseUrl.toLowerCase();
-  if (url.includes("anthropic") || url.includes("claude")) return "claude";
+  // Kimi Code API uses Claude-compatible format
+  if (url.includes("anthropic") || url.includes("claude") || url.includes("kimi.com")) return "claude";
   return "openai";
 }
 
@@ -75,16 +76,17 @@ async function callClaude(
     .filter((m) => m.role !== "system")
     .map((m) => ({ role: m.role, content: m.content }));
 
-  const response = await fetch(`${env.aiBaseUrl}/v1/messages`, {
+  const response = await fetch(`${env.aiBaseUrl.replace(/\/$/, "")}/v1/messages`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-api-key": env.aiApiKey,
       "anthropic-version": "2023-06-01",
+      "User-Agent": "claude-code/0.1.0",
     },
     body: JSON.stringify({
       model: env.aiModel,
-      max_tokens: 4096,
+      max_tokens: 32768,
       system: systemMsg?.content,
       messages: chatMessages,
       temperature,
@@ -268,16 +270,17 @@ async function* streamClaude(
     .filter((m) => m.role !== "system")
     .map((m) => ({ role: m.role, content: m.content }));
 
-  const resp = await fetch(`${env.aiBaseUrl}/v1/messages`, {
+  const resp = await fetch(`${env.aiBaseUrl.replace(/\/$/, "")}/v1/messages`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-api-key": env.aiApiKey,
       "anthropic-version": "2023-06-01",
+      "User-Agent": "claude-code/0.1.0",
     },
     body: JSON.stringify({
       model: env.aiModel,
-      max_tokens: 4096,
+      max_tokens: 32768,
       system: systemMsg?.content,
       messages: chatMessages,
       temperature,

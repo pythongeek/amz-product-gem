@@ -28,16 +28,20 @@ export const env = {
     process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   supabaseAnonKey:
     process.env.SUPABASE_ANON_KEY || process.env.VITE_PUBLIC_SUPABASE_ANON_KEY || "",
-  // AI API (Primary - Kimi Code / OpenAI-compatible / Claude-compatible)
-  aiApiKey: process.env.AI_API_KEY || process.env.KIMI_API_KEY || process.env.OPENAI_API_KEY || process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY || "",
-  aiBaseUrl: process.env.AI_BASE_URL || process.env.KIMI_BASE_URL || process.env.CLAUDE_BASE_URL || process.env.ANTHROPIC_BASE_URL || "https://api.moonshot.cn/v1",
-  aiModel: process.env.AI_MODEL || process.env.KIMI_MODEL || process.env.CLAUDE_MODEL || "moonshot-v1-128k",
+  // AI API (Primary - Kimi Code)
+  // Uses Claude-compatible /v1/messages format with x-api-key auth
+  // Base URL: https://api.kimi.com/coding/  |  Model: kimi-code
+  aiApiKey: process.env.AI_API_KEY || process.env.KIMI_API_KEY || "",
+  aiBaseUrl: process.env.AI_BASE_URL || process.env.KIMI_BASE_URL || "https://api.kimi.com/coding",
+  aiModel: process.env.AI_MODEL || process.env.KIMI_MODEL || "kimi-code",
   // AI API format: "openai" | "claude" — auto-detected from baseUrl if not set
   aiFormat: (process.env.AI_FORMAT || process.env.KIMI_FORMAT || "") as "openai" | "claude" | "",
   // AI API (Fallback - MiniMax)
+  // Uses OpenAI-compatible /chat/completions format
+  // Base URL: https://api.minimax.io/v1  |  Model: MiniMax-M3
   minimaxApiKey: process.env.MINIMAX_API_KEY || "",
-  minimaxBaseUrl: process.env.MINIMAX_BASE_URL || "https://api.minimax.chat/v1",
-  minimaxModel: process.env.MINIMAX_MODEL || "abab6.5s-chat",
+  minimaxBaseUrl: process.env.MINIMAX_BASE_URL || "https://api.minimax.io/v1",
+  minimaxModel: process.env.MINIMAX_MODEL || "MiniMax-M3",
   // Cron-jobs.org
   cronJobsOrgApiKey: process.env.CRON_JOBS_ORG_API_KEY || "",
   cronSecret: process.env.CRON_SECRET || "",
