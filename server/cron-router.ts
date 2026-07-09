@@ -91,9 +91,21 @@ cronApp.post("/process-research", async (c) => {
         ? "সতর্কতা (CAUTION) — ঝুঁকি আছে"
         : "বর্জন (FAIL) — এড়িয়ে চলুন";
 
-    // Save report
+    // Create a product first (so report has a valid productId FK)
+    const [product] = await db
+      .insert(products)
+      .values({
+        userId: job.userId || undefined,
+        asin: "RESEARCH-" + job.id,
+        title: job.input,
+        marketplace: job.marketplace || "US",
+        status: "researching",
+      })
+      .returning();
+
+    // Save report with the real productId
     await db.insert(reports).values({
-      productId: 0, // placeholder — will be linked when user saves
+      productId: product.id,
       userId: job.userId || 0,
       title: job.input,
       content: result,
@@ -117,7 +129,7 @@ cronApp.post("/process-research", async (c) => {
       })
       .where(eq(researchJobs.id, job.id));
 
-    return c.json({ ok: true, processed: 1, jobId: job.id });
+    return c.json({ ok: true, processed: 1, jobId: job.id, productId: product.id });
   } catch (err: any) {
     // Mark job as failed
     await db
