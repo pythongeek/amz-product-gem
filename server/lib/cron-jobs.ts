@@ -32,7 +32,7 @@ export async function createCronJob(job: CronJobInput): Promise<{ jobId: number 
   const resp = await fetch(`${BASE}/jobs`, {
     method: "PUT",
     headers: authHeaders(),
-    body: JSON.stringify(job),
+    body: JSON.stringify({ job }),
   });
 
   if (!resp.ok) {

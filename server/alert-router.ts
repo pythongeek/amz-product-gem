@@ -77,10 +77,14 @@ export const alertRouter = createRouter({
         const mockChanges = Math.random() > 0.7;
 
         if (mockChanges) {
-          const alertType: "price_drop" | "bsr_change" | "new_review" =
-            ["price_drop", "bsr_change", "new_review"][
-              Math.floor(Math.random() * 3)
-            ];
+          const alertType = (() => {
+        const types: Array<"price_drop" | "bsr_change" | "new_review"> = [
+          "price_drop",
+          "bsr_change",
+          "new_review",
+        ];
+        return types[Math.floor(Math.random() * 3)];
+      })();
 
           const alert = await db
             .insert(alerts)
@@ -114,18 +118,20 @@ export const alertRouter = createRouter({
         .where(eq(cronState.key, "product_analysis_cursor"));
 
       // Check if we've processed all products
-      const totalProducts = await db.select({ count: sql<number>`count(*)` }).from(products);
-      const allProcessed = nextCursor >= totalProducts[0].count;
+      const totalProducts = await db.select({ count: sql<number>`count(*)::int` }).from(products);
+      const totalCount = totalProducts[0].count;
+      const nextCursorNum = parseInt(nextCursor);
+      const allProcessed = nextCursorNum >= totalCount;
 
       return {
         checked: processedCount,
-        totalChecked: allProducts.length,
+        totalChecked: productsToProcess.length,
         newAlerts: newAlertsCount,
         allProcessed,
         nextCursor,
         message: allProcessed
           ? "All products processed"
-          : `Processed ${processedCount} products. ${totalProducts[0].count - nextCursor} products remaining.`,
+          : `Processed ${processedCount} products. ${totalCount - nextCursorNum} products remaining.`,
       };
     }),
 });

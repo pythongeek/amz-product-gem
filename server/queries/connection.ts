@@ -30,6 +30,7 @@ export function getDb() {
       // Explicit SSL config: enable SSL, skip self-signed cert verification
       ssl: { rejectUnauthorized: false },
       // Disable prepared statements for PgBouncer compatibility
+      // @ts-expect-error prepareThreshold is not in PoolConfig type but works at runtime
       prepareThreshold: 0,
       connectionTimeoutMillis: 30000,
       idleTimeoutMillis: 30000,
