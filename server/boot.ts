@@ -74,6 +74,23 @@ app.get("/api/debug/ai-test", async (c) => {
   }
 });
 
+// Debug: check pending research jobs
+app.get("/api/debug/jobs", async (c) => {
+  try {
+    const { getDb } = await import("./queries/connection");
+    const { researchJobs } = await import("@db/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    const db = getDb();
+    const pending = await db.select().from(researchJobs).where(eq(researchJobs.status, "pending")).orderBy(desc(researchJobs.createdAt)).limit(10);
+    const running = await db.select().from(researchJobs).where(eq(researchJobs.status, "running")).orderBy(desc(researchJobs.createdAt)).limit(10);
+    const completed = await db.select().from(researchJobs).where(eq(researchJobs.status, "completed")).orderBy(desc(researchJobs.createdAt)).limit(5);
+    const failed = await db.select().from(researchJobs).where(eq(researchJobs.status, "failed")).orderBy(desc(researchJobs.createdAt)).limit(5);
+    return c.json({ ok: true, pending: pending.length, running: running.length, completed: completed.length, failed: failed.length, latestPending: pending, latestFailed: failed });
+  } catch (err: any) {
+    return c.json({ ok: false, error: err.message }, 500);
+  }
+});
+
 // ── PUBLIC CRON ENDPOINTS (called by cron-jobs.org) ──
 // These bypass Vercel's 8s HTTP timeout because cron-jobs.org calls them
 // from outside Vercel's gateway, and vercel.json sets maxDuration: 300s.
