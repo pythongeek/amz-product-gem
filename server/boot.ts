@@ -40,6 +40,40 @@ app.get("/api/debug/admin-table", async (c) => {
   }
 });
 
+// AI API config debug (redacted)
+app.get("/api/debug/ai-config", async (c) => {
+  return c.json({
+    ok: true,
+    minimax: {
+      baseUrl: env.minimaxBaseUrl,
+      model: env.minimaxModel,
+      apiKeySet: !!env.minimaxApiKey,
+      apiKeyLength: env.minimaxApiKey?.length || 0,
+      apiKeyPrefix: env.minimaxApiKey?.substring(0, 10) || "none",
+    },
+    kimi: {
+      baseUrl: env.aiBaseUrl,
+      model: env.aiModel,
+      apiKeySet: !!env.aiApiKey,
+      apiKeyLength: env.aiApiKey?.length || 0,
+    },
+  });
+});
+
+// Test AI API directly
+app.get("/api/debug/ai-test", async (c) => {
+  try {
+    const { callAIWithFallback } = await import("./lib/ai");
+    const result = await callAIWithFallback([
+      { role: "system", content: "You are a helpful assistant." },
+      { role: "user", content: "Say 'API is working' in Bangla." },
+    ]);
+    return c.json({ ok: true, result });
+  } catch (err: any) {
+    return c.json({ ok: false, error: err.message }, 500);
+  }
+});
+
 // ── PUBLIC CRON ENDPOINTS (called by cron-jobs.org) ──
 // These bypass Vercel's 8s HTTP timeout because cron-jobs.org calls them
 // from outside Vercel's gateway, and vercel.json sets maxDuration: 300s.
