@@ -148,6 +148,42 @@ app.post("/api/debug/create-test-job", async (c) => {
   }
 });
 
+// Debug: check products table
+app.get("/api/debug/products", async (c) => {
+  try {
+    const { getDb } = await import("./queries/connection");
+    const { products } = await import("@db/schema");
+    const { desc } = await import("drizzle-orm");
+    const db = getDb();
+    const all = await db.select().from(products).orderBy(desc(products.createdAt)).limit(20);
+    return c.json({ ok: true, count: all.length, products: all.map(p => ({
+      id: p.id, userId: p.userId, asin: p.asin, title: p.title,
+      status: p.status, marketplace: p.marketplace, createdAt: p.createdAt
+    })) });
+  } catch (err: any) {
+    return c.json({ ok: false, error: err.message }, 500);
+  }
+});
+
+// ── PUBLIC CRON ENDPOINTS (called by cron-jobs.org) ──
+app.post("/api/debug/create-test-job", async (c) => {
+  try {
+    const { getDb } = await import("./queries/connection");
+    const { researchJobs } = await import("@db/schema");
+    const db = getDb();
+    const [job] = await db.insert(researchJobs).values({
+      userId: 1,
+      input: "test product " + Date.now(),
+      inputType: "keyword",
+      marketplace: "US",
+      status: "pending",
+    }).returning();
+    return c.json({ ok: true, jobId: job.id, message: "Test job created" });
+  } catch (err: any) {
+    return c.json({ ok: false, error: err.message }, 500);
+  }
+});
+
 // ── PUBLIC CRON ENDPOINTS (called by cron-jobs.org) ──
 // These bypass Vercel's 8s HTTP timeout because cron-jobs.org calls them
 // from outside Vercel's gateway, and vercel.json sets maxDuration: 300s.
