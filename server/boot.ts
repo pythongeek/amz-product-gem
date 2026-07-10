@@ -74,7 +74,7 @@ app.get("/api/debug/ai-test", async (c) => {
   }
 });
 
-// Debug: check pending research jobs
+// Debug: check research jobs
 app.get("/api/debug/jobs", async (c) => {
   try {
     const { getDb } = await import("./queries/connection");
@@ -86,27 +86,6 @@ app.get("/api/debug/jobs", async (c) => {
     const completed = await db.select().from(researchJobs).where(eq(researchJobs.status, "completed")).orderBy(desc(researchJobs.createdAt)).limit(5);
     const failed = await db.select().from(researchJobs).where(eq(researchJobs.status, "failed")).orderBy(desc(researchJobs.createdAt)).limit(5);
     return c.json({ ok: true, pending: pending.length, running: running.length, completed: completed.length, failed: failed.length, latestPending: pending, latestFailed: failed });
-  } catch (err: any) {
-    return c.json({ ok: false, error: err.message }, 500);
-  }
-});
-
-// Debug: manually trigger cron job (for testing)
-app.post("/api/debug/trigger-cron", async (c) => {
-  try {
-    const body = await c.req.json().catch(() => ({}));
-    const secret = body.cronSecret || c.req.header("x-cron-secret");
-    if (secret !== env.cronSecret) {
-      return c.json({ error: "Unauthorized — invalid cron secret" }, 401);
-    }
-    // Forward to cron router
-    const req = new Request(c.req.url.replace("/debug/trigger-cron", "/cron/process-research"), {
-      method: "POST",
-      headers: { "x-cron-secret": env.cronSecret || "" },
-    });
-    const resp = await app.fetch(req);
-    const result = await resp.json();
-    return c.json({ ok: true, triggered: true, result });
   } catch (err: any) {
     return c.json({ ok: false, error: err.message }, 500);
   }
@@ -128,17 +107,23 @@ app.get("/api/debug/all-jobs", async (c) => {
     return c.json({ ok: false, error: err.message }, 500);
   }
 });
-app.get("/api/debug/jobs", async (c) => {
+
+// Debug: manually trigger cron job (for testing)
+app.post("/api/debug/trigger-cron", async (c) => {
   try {
-    const { getDb } = await import("./queries/connection");
-    const { researchJobs } = await import("@db/schema");
-    const { eq, desc } = await import("drizzle-orm");
-    const db = getDb();
-    const pending = await db.select().from(researchJobs).where(eq(researchJobs.status, "pending")).orderBy(desc(researchJobs.createdAt)).limit(10);
-    const running = await db.select().from(researchJobs).where(eq(researchJobs.status, "running")).orderBy(desc(researchJobs.createdAt)).limit(10);
-    const completed = await db.select().from(researchJobs).where(eq(researchJobs.status, "completed")).orderBy(desc(researchJobs.createdAt)).limit(5);
-    const failed = await db.select().from(researchJobs).where(eq(researchJobs.status, "failed")).orderBy(desc(researchJobs.createdAt)).limit(5);
-    return c.json({ ok: true, pending: pending.length, running: running.length, completed: completed.length, failed: failed.length, latestPending: pending, latestFailed: failed });
+    const body = await c.req.json().catch(() => ({}));
+    const secret = body.cronSecret || c.req.header("x-cron-secret");
+    if (secret !== env.cronSecret) {
+      return c.json({ error: "Unauthorized — invalid cron secret" }, 401);
+    }
+    // Forward to cron router
+    const req = new Request(c.req.url.replace("/debug/trigger-cron", "/cron/process-research"), {
+      method: "POST",
+      headers: { "x-cron-secret": env.cronSecret || "" },
+    });
+    const resp = await app.fetch(req);
+    const result = await resp.json();
+    return c.json({ ok: true, triggered: true, result });
   } catch (err: any) {
     return c.json({ ok: false, error: err.message }, 500);
   }
@@ -192,4 +177,3 @@ if (env.isProduction && !process.env.VERCEL) {
     console.log(`Server running on http://localhost:${port}/`);
   });
 }
-// Build timestamp:  1783718145
