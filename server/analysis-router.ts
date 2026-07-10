@@ -158,27 +158,27 @@ ${input.analysis}
       return { report };
     }),
 
-  // ── Get Trends (mock data for now) ──
+  // ── Get Trends (real AI analysis) ──
   getTrends: authedQuery
     .input(z.object({ keyword: z.string() }))
     .query(async ({ input }) => {
+      const prompt = `"${input.keyword}" কীওয়ার্ডটি Amazon-এর ট্রেন্ড বিশ্লেষণ করুন। বাংলায় এই ফরম্যাটে দিন:
+১. ট্রেন্ড ডিরেকশন (রাইজিং/ফলিং/স্টেবল)
+২. সিজনালিটি (কোন মাসে বেশি চাহিদা)
+৩. পিক মাসগুলো
+৪. রিলেটেড কীওয়ার্ড (৫টি)
+৫. টপ রিজিয়ন (US স্টেট অনুযায়ী)
+
+JSON ফরম্যাটে দিন যাতে পার্স করা যায়।`;
+
+      const trendsText = await callAIWithFallback([
+        { role: "system", content: BANGLA_SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ], 0.5, 2000);
+
       return {
         keyword: input.keyword,
-        trendDirection: Math.random() > 0.3 ? "রাইজিং (↗️)" : "ফলিং (↘️)",
-        seasonality: "বছরজুড়ে চাহিদা (Year-round)",
-        peakMonths: ["জানুয়ারি", "জুন", "নভেম্বর", "ডিসেম্বর"],
-        relatedQueries: [
-          `${input.keyword} bundle`,
-          `best ${input.keyword} 2026`,
-          `${input.keyword} for home`,
-          `premium ${input.keyword}`,
-        ],
-        interestByRegion: [
-          { region: "California", interest: 100 },
-          { region: "Texas", interest: 85 },
-          { region: "Florida", interest: 78 },
-          { region: "New York", interest: 72 },
-        ],
+        aiAnalysis: trendsText,
       };
     }),
 });

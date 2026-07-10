@@ -31,8 +31,10 @@ export const env = {
   // AI API (Primary - MiniMax)
   // Uses Anthropic-compatible /v1/messages format with x-api-key header
   // Base URL: https://api.minimax.io/anthropic  |  Model: MiniMax-M3
+  // NOTE: We hardcode the Anthropic endpoint because the OpenAI-compatible
+  // endpoint (/v1) does NOT work with x-api-key auth. Only /anthropic works.
   minimaxApiKey: process.env.MINIMAX_API_KEY || "",
-  minimaxBaseUrl: process.env.MINIMAX_BASE_URL || "https://api.minimax.io/anthropic",
+  minimaxBaseUrl: "https://api.minimax.io/anthropic",
   minimaxModel: process.env.MINIMAX_MODEL || "MiniMax-M3",
   // AI API (Fallback - Kimi Code, disabled until format is known)
   // Uses Claude-compatible /v1/messages format with x-api-key auth
