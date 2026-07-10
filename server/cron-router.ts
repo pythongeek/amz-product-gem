@@ -226,31 +226,51 @@ cronApp.post("/process-research", async (c) => {
         : "বর্জন (FAIL) — এড়িয়ে চলুন";
 
     // Create a product first (so report has a valid productId FK)
-    const [product] = await db
-      .insert(products)
-      .values({
-        userId: job.userId || undefined,
-        asin: "RESEARCH-" + job.id,
-        title: job.input,
-        marketplace: job.marketplace || "US",
-        status: "researching",
-      })
-      .returning();
+    let productId: number;
+    try {
+      const productResult = await db
+        .insert(products)
+        .values({
+          userId: job.userId ?? null,
+          asin: "RESEARCH-" + job.id,
+          title: job.input,
+          marketplace: job.marketplace || "US",
+          status: "researching",
+        })
+        .returning();
+
+      if (!productResult || productResult.length === 0 || !productResult[0].id) {
+        throw new Error("Product insert failed: no ID returned");
+      }
+      productId = productResult[0].id;
+    } catch (productErr: any) {
+      // If product insert fails, mark job failed and rethrow
+      await db
+        .update(researchJobs)
+        .set({ status: "failed", error: "Product insert failed: " + productErr.message })
+        .where(eq(researchJobs.id, job.id));
+      throw new Error("Product insert failed: " + productErr.message);
+    }
 
     // Save report with the real productId
-    await db.insert(reports).values({
-      productId: product.id,
-      userId: job.userId || 0,
-      title: job.input,
-      content: result,
-      summary: result.substring(0, 500) + "...",
-      marketAnalysis: result,
-      competitionAnalysis: result,
-      profitAnalysis: result,
-      riskAnalysis: result,
-      recommendation,
-      language: "bn",
-    });
+    try {
+      await db.insert(reports).values({
+        productId: productId,
+        userId: job.userId ?? null,
+        title: job.input,
+        content: result,
+        summary: result.substring(0, 500) + "...",
+        marketAnalysis: result,
+        competitionAnalysis: result,
+        profitAnalysis: result,
+        riskAnalysis: result,
+        recommendation,
+        language: "bn",
+      });
+    } catch (reportErr: any) {
+      // If report insert fails, still mark job completed with result
+      console.error("[cron] Report insert failed:", reportErr.message);
+    }
 
     // Mark job as completed
     await db
@@ -263,7 +283,7 @@ cronApp.post("/process-research", async (c) => {
       })
       .where(eq(researchJobs.id, job.id));
 
-    return c.json({ ok: true, processed: 1, jobId: job.id, productId: product.id });
+    return c.json({ ok: true, processed: 1, jobId: job.id, productId });
   } catch (err: any) {
     // Mark job as failed
     await db
