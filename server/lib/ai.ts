@@ -83,6 +83,32 @@ function generateMockReport(messages: ChatMessage[]): string {
 `;
 }
 
+/* ──────────────────── Fetch with timeout ──────────────────── */
+
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs = 25000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === "AbortError") {
+      throw new Error(`Request timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  }
+}
+
 /* ──────────────────── Minimax (PRIMARY) ──────────────────── */
 
 async function callMinimax(
@@ -93,18 +119,28 @@ async function callMinimax(
     throw new Error("MINIMAX_API_KEY not set in Vercel environment variables.");
   }
 
-  const response = await fetch(`${env.minimaxBaseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${env.minimaxApiKey}`,
-    },
-    body: JSON.stringify({
-      model: env.minimaxModel,
-      messages,
-      temperature,
-    }),
+  console.log("[AI] Calling Minimax API...", {
+    baseUrl: env.minimaxBaseUrl,
+    model: env.minimaxModel,
+    apiKeyLength: env.minimaxApiKey.length,
   });
+
+  const response = await fetchWithTimeout(
+    `${env.minimaxBaseUrl}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.minimaxApiKey}`,
+      },
+      body: JSON.stringify({
+        model: env.minimaxModel,
+        messages,
+        temperature,
+      }),
+    },
+    25000 // 25 second timeout
+  );
 
   if (!response.ok) {
     const error = await response.text();
@@ -112,7 +148,9 @@ async function callMinimax(
   }
 
   const data = (await response.json()) as OpenAIResponse;
-  return data.choices[0]?.message?.content || "";
+  const content = data.choices[0]?.message?.content || "";
+  console.log("[AI] Minimax response received, length:", content.length);
+  return content;
 }
 
 /* ──────────────────── Primary AI call ──────────────────── */
