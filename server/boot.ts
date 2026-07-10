@@ -91,6 +91,78 @@ app.get("/api/debug/jobs", async (c) => {
   }
 });
 
+// Debug: manually trigger cron job (for testing)
+app.post("/api/debug/trigger-cron", async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const secret = body.cronSecret || c.req.header("x-cron-secret");
+    if (secret !== env.cronSecret) {
+      return c.json({ error: "Unauthorized — invalid cron secret" }, 401);
+    }
+    // Forward to cron router
+    const req = new Request(c.req.url.replace("/debug/trigger-cron", "/cron/process-research"), {
+      method: "POST",
+      headers: { "x-cron-secret": env.cronSecret || "" },
+    });
+    const resp = await app.fetch(req);
+    const result = await resp.json();
+    return c.json({ ok: true, triggered: true, result });
+  } catch (err: any) {
+    return c.json({ ok: false, error: err.message }, 500);
+  }
+});
+
+// Debug: list all research jobs (no limit)
+app.get("/api/debug/all-jobs", async (c) => {
+  try {
+    const { getDb } = await import("./queries/connection");
+    const { researchJobs } = await import("@db/schema");
+    const { desc } = await import("drizzle-orm");
+    const db = getDb();
+    const all = await db.select().from(researchJobs).orderBy(desc(researchJobs.createdAt)).limit(50);
+    return c.json({ ok: true, count: all.length, jobs: all.map(j => ({
+      id: j.id, userId: j.userId, input: j.input, status: j.status,
+      createdAt: j.createdAt, error: j.error?.substring(0, 100)
+    })) });
+  } catch (err: any) {
+    return c.json({ ok: false, error: err.message }, 500);
+  }
+});
+app.get("/api/debug/jobs", async (c) => {
+  try {
+    const { getDb } = await import("./queries/connection");
+    const { researchJobs } = await import("@db/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    const db = getDb();
+    const pending = await db.select().from(researchJobs).where(eq(researchJobs.status, "pending")).orderBy(desc(researchJobs.createdAt)).limit(10);
+    const running = await db.select().from(researchJobs).where(eq(researchJobs.status, "running")).orderBy(desc(researchJobs.createdAt)).limit(10);
+    const completed = await db.select().from(researchJobs).where(eq(researchJobs.status, "completed")).orderBy(desc(researchJobs.createdAt)).limit(5);
+    const failed = await db.select().from(researchJobs).where(eq(researchJobs.status, "failed")).orderBy(desc(researchJobs.createdAt)).limit(5);
+    return c.json({ ok: true, pending: pending.length, running: running.length, completed: completed.length, failed: failed.length, latestPending: pending, latestFailed: failed });
+  } catch (err: any) {
+    return c.json({ ok: false, error: err.message }, 500);
+  }
+});
+
+// Debug: create a test research job (for testing the full flow)
+app.post("/api/debug/create-test-job", async (c) => {
+  try {
+    const { getDb } = await import("./queries/connection");
+    const { researchJobs } = await import("@db/schema");
+    const db = getDb();
+    const [job] = await db.insert(researchJobs).values({
+      userId: 1,
+      input: "test product " + Date.now(),
+      inputType: "keyword",
+      marketplace: "US",
+      status: "pending",
+    }).returning();
+    return c.json({ ok: true, jobId: job.id, message: "Test job created" });
+  } catch (err: any) {
+    return c.json({ ok: false, error: err.message }, 500);
+  }
+});
+
 // ── PUBLIC CRON ENDPOINTS (called by cron-jobs.org) ──
 // These bypass Vercel's 8s HTTP timeout because cron-jobs.org calls them
 // from outside Vercel's gateway, and vercel.json sets maxDuration: 300s.
