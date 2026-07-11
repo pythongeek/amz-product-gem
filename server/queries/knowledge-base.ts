@@ -58,7 +58,8 @@ export async function getFeeRates(
   const allRates = await getAllFeeRates();
   const now = new Date();
 
-  return allRates.filter(rate => {
+  // 1. Filter by marketplace, fee type and effective date <= now
+  const activeRates = allRates.filter(rate => {
     if (rate.marketplace.toUpperCase() !== marketplace.toUpperCase()) return false;
     if (rate.feeType !== feeType) return false;
     
@@ -67,6 +68,18 @@ export async function getFeeRates(
 
     return true;
   });
+
+  // 2. Select only the latest rate version for each unique specification group
+  const latestSpecMap = new Map<string, KbFeeRate>();
+  for (const rate of activeRates) {
+    const key = `${rate.category || ""}-${rate.sizeTier || ""}-${rate.priceMin || ""}-${rate.priceMax || ""}-${rate.weightMinOz || ""}-${rate.weightMaxOz || ""}`;
+    const existing = latestSpecMap.get(key);
+    if (!existing || new Date(rate.effectiveDate).getTime() > new Date(existing.effectiveDate).getTime()) {
+      latestSpecMap.set(key, rate);
+    }
+  }
+
+  return Array.from(latestSpecMap.values());
 }
 
 /**

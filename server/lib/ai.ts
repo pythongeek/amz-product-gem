@@ -126,8 +126,16 @@ export async function callAIWithFallback(
   temperature = 0.7,
   maxTokens = 4000
 ): Promise<string> {
-  // Only Minimax is supported. If it fails, the error propagates.
-  return callMinimax(messages, temperature, maxTokens);
+  try {
+    return await callMinimax(messages, temperature, maxTokens);
+  } catch (error: any) {
+    console.error("[CRITICAL AI FAILURE ALERT] AI research call failed!", {
+      errorMessage: error.message,
+      errorStack: error.stack,
+      timestamp: new Date().toISOString(),
+    });
+    throw error;
+  }
 }
 
 export async function* callAIStream(

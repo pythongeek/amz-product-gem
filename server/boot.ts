@@ -7,7 +7,10 @@ import { createContext } from "./context";
 import { env } from "./lib/env";
 import cronRouter from "./cron-router";
 
-import { getRawPool } from "./queries/connection";
+import { getRawPool, getDb } from "./queries/connection";
+import { kbFeeRates, kbRevisions } from "@db/schema";
+import { desc, sql } from "drizzle-orm";
+import { verifyAdminToken } from "./lib/admin-auth";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -16,12 +19,73 @@ app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 // Health check
 app.get("/api/health", (c) => c.json({ status: "ok", time: new Date().toISOString() }));
 
-// Gate debug routes in production
+// Gate debug routes in production (except admin auth on kb-status)
 app.use("/api/debug/*", async (c, next) => {
   if (env.isProduction) {
+    if (c.req.path === "/api/debug/kb-status") {
+      const authHeader = c.req.header("authorization");
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.substring(7);
+        const payload = await verifyAdminToken(token);
+        if (payload && payload.role === "admin") {
+          return await next();
+        }
+      }
+    }
     return c.json({ ok: false, error: "Forbidden in production" }, 403);
   }
   await next();
+});
+
+// KB Status Health check
+app.get("/api/debug/kb-status", async (c) => {
+  try {
+    const db = getDb();
+    
+    // Calculate staleness from kbFeeRates max effective date
+    const maxEffectiveDateRow = await db
+      .select({ maxDate: sql<string>`max(effective_date)` })
+      .from(kbFeeRates);
+
+    const maxDateStr = maxEffectiveDateRow[0]?.maxDate;
+    if (!maxDateStr) {
+      return c.json({
+        ok: true,
+        status: "empty",
+        message: "No fee data found in database. Please run seed migrations.",
+      });
+    }
+
+    const maxDate = new Date(maxDateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - maxDate.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    // Stale warning threshold: 365 days (1 year)
+    const isStale = diffDays > 365;
+
+    // Fetch last revision
+    const lastRevisions = await db
+      .select()
+      .from(kbRevisions)
+      .orderBy(desc(kbRevisions.createdAt))
+      .limit(1);
+
+    const lastRevision = lastRevisions[0] || null;
+
+    return c.json({
+      ok: true,
+      status: isStale ? "stale" : "current",
+      stalenessDays: diffDays,
+      maxEffectiveDate: maxDateStr,
+      lastRevision,
+      warning: isStale 
+        ? "WARNING: Fee assumptions database is older than 1 year. Please run the admin KB editor to update the 2026 fee snapshots."
+        : undefined,
+    });
+  } catch (err: any) {
+    return c.json({ ok: false, error: err.message }, 500);
+  }
 });
 
 // DB diagnostic
