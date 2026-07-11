@@ -43,10 +43,12 @@ export const env = {
   supabaseAnonKey:
     process.env.SUPABASE_ANON_KEY || process.env.VITE_PUBLIC_SUPABASE_ANON_KEY || "",
   // AI API (Primary - MiniMax)
-  // Uses OpenAI-compatible /chat/completions format
-  // Base URL: https://api.minimax.io/v1  |  Model: MiniMax-M3
+  // Uses Anthropic-compatible /v1/messages format with x-api-key header
+  // Base URL: https://api.minimax.io/anthropic  |  Model: MiniMax-M3
+  // NOTE: We hardcode the Anthropic endpoint because the OpenAI-compatible
+  // endpoint (/v1) does NOT work with x-api-key auth. Only /anthropic works.
   minimaxApiKey: process.env.MINIMAX_API_KEY || "",
-  minimaxBaseUrl: process.env.MINIMAX_BASE_URL || "https://api.minimax.io/v1",
+  minimaxBaseUrl: "https://api.minimax.io/anthropic",
   minimaxModel: process.env.MINIMAX_MODEL || "MiniMax-M3",
   // AI API (Fallback - Kimi Code, disabled until format is known)
   // Uses Claude-compatible /v1/messages format with x-api-key auth

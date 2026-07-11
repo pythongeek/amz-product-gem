@@ -311,40 +311,60 @@ BSR: ${manualData.bsr}
     const { scores, totalScore, grade, recommendation } = await scoreProduct(specs);
 
     // Create a product first (so report has a valid productId FK)
-    const [product] = await db
-      .insert(products)
-      .values({
-        userId: job.userId || undefined,
-        asin: isManual ? manualData.asin : ("RESEARCH-" + job.id),
-        title: isManual ? manualData.title : job.input,
-        price: isManual ? String(manualData.price) : null,
-        bsr: isManual ? manualData.bsr : null,
-        reviewCount: isManual ? manualData.reviewCount : null,
-        rating: isManual ? String(manualData.rating) : null,
-        sellerCount: isManual ? manualData.sellerCount : null,
-        marketplace: job.marketplace || "US",
-        status: "researching",
-      })
-      .returning();
+    let productId: number;
+    try {
+      const productResult = await db
+        .insert(products)
+        .values({
+          userId: job.userId || null,
+          asin: isManual ? manualData.asin : ("RESEARCH-" + job.id),
+          title: isManual ? manualData.title : job.input,
+          price: isManual ? String(manualData.price) : null,
+          bsr: isManual ? manualData.bsr : null,
+          reviewCount: isManual ? manualData.reviewCount : null,
+          rating: isManual ? String(manualData.rating) : null,
+          sellerCount: isManual ? manualData.sellerCount : null,
+          marketplace: job.marketplace || "US",
+          status: "researching",
+        })
+        .returning();
+
+      if (!productResult || productResult.length === 0 || !productResult[0].id) {
+        throw new Error("Product insert failed: no ID returned");
+      }
+      productId = productResult[0].id;
+    } catch (productErr: any) {
+      // If product insert fails, mark job failed and rethrow
+      await db
+        .update(researchJobs)
+        .set({ status: "failed", error: "Product insert failed: " + productErr.message })
+        .where(eq(researchJobs.id, job.id));
+      throw new Error("Product insert failed: " + productErr.message);
+    }
 
     // Save report with the real productId
-    await db.insert(reports).values({
-      productId: product.id,
-      userId: job.userId || 0,
-      title: job.input,
-      content: result,
-      summary: result.substring(0, 500) + "...",
-      marketAnalysis: result,
-      competitionAnalysis: result,
-      profitAnalysis: result,
-      riskAnalysis: result,
-      recommendation,
-      language: "bn",
-    });
+    try {
+      await db.insert(reports).values({
+        productId: productId,
+        userId: job.userId ?? null,
+        title: job.input,
+        content: result,
+        summary: result.substring(0, 500) + "...",
+        marketAnalysis: result,
+        competitionAnalysis: result,
+        profitAnalysis: result,
+        riskAnalysis: result,
+        recommendation,
+        language: "bn",
+      });
+    } catch (reportErr: any) {
+      // If report insert fails, still mark job completed with result
+      console.error("[cron] Report insert failed:", reportErr.message);
+    }
 
     // Save scores to productScores table
     await db.insert(productScores).values({
-      productId: product.id,
+      productId: productId,
       userId: job.userId || 0,
       priceScore: scores.priceScore,
       sizeWeightScore: scores.sizeWeightScore,
@@ -387,7 +407,7 @@ BSR: ${manualData.bsr}
       })
       .where(eq(researchJobs.id, job.id));
 
-    return c.json({ ok: true, processed: 1, jobId: job.id, productId: product.id });
+    return c.json({ ok: true, processed: 1, jobId: job.id, productId });
   } catch (err: any) {
     // Mark job as failed
     await db

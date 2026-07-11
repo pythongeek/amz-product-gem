@@ -5,144 +5,20 @@ export interface ChatMessage {
   content: string;
 }
 
-/* ──────────────────── OpenAI-compatible response type ──────────────────── */
+/* ──────────────────── Anthropic-compatible response type ──────────────────── */
 
-interface OpenAIResponse {
-  choices: Array<{ message: { content: string } }>;
+interface AnthropicContentBlock {
+  type: string;
+  text: string;
 }
 
-/* ──────────────────── Mock Mode (when no API keys are valid) ──────────────────── */
-
-function generateMockReport(messages: ChatMessage[]): string {
-  const userMsg = messages.find((m) => m.role === "user")?.content || "";
-  const product = userMsg.match(/keyword: "([^"]+)"/)?.[1] || 
-                  userMsg.match(/URL: ([^\s]+)/)?.[1] || 
-                  "এই প্রোডাক্ট";
-
-  return `# 📊 ${product} - Amazon FBA রিসার্চ রিপোর্ট
-
----
-
-## 📋 রিপোর্ট ওভারভিউ
-| তথ্য | বিবরণ |
-|------|--------|
-| **প্রোডাক্ট** | ${product} |
-| **মার্কেটপ্লেস** | Amazon US |
-| **বিশ্লেষণ তারিখ** | ${new Date().toLocaleDateString("bn-BD")} |
-| **রিপোর্ট টাইপ** | AI-জেনারেটেড বিশ্লেষণ |
-
----
-
-# 📊 মার্কেট অ্যানালাইসিস
-
-| মেট্রিক | ভ্যালু | মন্তব্য |
-|---------|--------|--------|
-| মার্কেট সাইজ | মাঝারি-বড় | স্থিতিশীল চাহিদা |
-| সিজনালিটি | বছরজুড়ে | Year-round demand |
-| ট্রেন্ড | ↗️ রাইজিং | ইতিবাচক গ্রোথ |
-| চাহিদা স্কোর | **৭/১০** | ভালো চাহিদা |
-
-**মার্কেট ইনসাইট:**
-- ✅ এই প্রোডাক্টের চাহিদা সারা বছর স্থিতিশীল
-- ✅ সিজনাল পিক: নভেম্বর-জানুয়ারি (Q4)
-- ⚠️ নতুন সেলারদের জন্য মাঝারি প্রতিযোগিতা
-
----
-
-# ⚔️ কম্পিটিশন অ্যানালাইসিস
-
-| মেট্রিক | ভ্যালু | মন্তব্য |
-|---------|--------|--------|
-| কম্পিটিটর সংখ্যা | ১৫-২০টি | মাঝারি প্রতিযোগিতা |
-| অ্যাভারেজ রিভিউ | ৫০-২০০ | এন্ট্রি সম্ভব |
-| ব্র্যান্ড ডোমিনেন্স | ৪০% | মিশ্র মার্কেট |
-| এন্ট্রি ব্যারিয়ার | **৬/১০** | মাঝারি |
-
-**কম্পিটিশন ল্যান্ডস্কেপ:**
-- 🏆 টপ সেলার: ৫০০+ রিভিউ
-- 📈 মিড-টিয়ার: ৫০-২০০ রিভিউ
-- 🎯 এন্ট্রি লেভেল: ১০-৫০ রিভিউ
-
----
-
-# 💰 প্রফিটাবিলিটি অ্যানালাইসিস
-
-| মেট্রিক | ভ্যালু | মন্তব্য |
-|---------|--------|--------|
-| এস্টিমেটেড প্রাইজ | **$২৫-৩৫** | সুইট স্পট |
-| FBA ফি | ~$৮-১২ | স্ট্যান্ডার্ড |
-| সোর্সিং কস্ট | $৮-১৫ | আলিবাবা/১৬৮৮ |
-| নেট মার্জিন | **২৫-৩৫%** | ভালো |
-| মাসিক সেলস | ৩০০-৫০০ ইউনিট | সম্ভাবনা |
-
-**প্রফিট ক্যালকুলেশন:**
-- সেলিং প্রাইজ: $৩০.০০
-- FBA ফি: -$১০.০০
-- সোর্সিং কস্ট: -$১২.০০
-- প্রফিট: $৮.০০ (২৭% মার্জিন)
-
----
-
-# ⚠️ রিস্ক অ্যানালাইসিস
-
-### 🔴 হাই রিস্ক
-- কোয়ালিটি কন্ট্রোল (সাপ্লায়ার ভেরিয়েশন)
-- স্টকআউট (ইনভেন্টরি ম্যানেজমেন্ট)
-
-### 🟡 মিডিয়াম রিস্ক
-- প্রাইজ ওয়ার (কম্পিটিটর আন্ডারকাটিং)
-- রিভিউ ম্যানিপুলেশন (অ্যামাজন পলিসি)
-
-### 🟢 লো রিস্ক
-- সিজনালিটি (বছরজুড়ে চাহিদা)
-- লিস্টিং সাসপেনশন (কমপ্লায়েন্ট সহজ)
-
----
-
-# 🏆 ১৩-পয়েন্ট ভ্যালিডেশন স্কোর
-
-| # | ক্রাইটেরিয়া | স্কোর | ম্যাক্স | স্ট্যাটাস |
-|---|-------------|-------|--------|----------|
-| ১ | প্রাইজ স্কোর | **৮** | ১০ | ✅ |
-| ২ | সাইজ/ওয়েট | **৭** | ১০ | ✅ |
-| ৩ | মার্কেট সাইজ | **৮** | ১০ | ✅ |
-| ৪ | রিভিউ ব্যারিয়ার | **৭** | ১০ | ✅ |
-| ৫ | ডিফারেন্সিয়েশন | **৬** | ১০ | ⚠️ |
-| ৬ | সিজনালিটি | **৭** | ১০ | ✅ |
-| ৭ | কমপ্লেক্সিটি | **৭** | ১০ | ✅ |
-| ৮ | রিটার্ন রেট | **৭** | ১০ | ✅ |
-| ৯ | ব্র্যান্ড ডোমিনেন্স | **৬** | ১০ | ⚠️ |
-| ১০ | ট্রেন্ড | **৭** | ১০ | ✅ |
-| ১১ | ডিফেন্সিবিলিটি | **৬** | ১০ | ⚠️ |
-| ১২ | ম্যানুফ্যাকচারেবিলিটি | **৭** | ১০ | ✅ |
-| ১৩ | মার্জিন | **৭** | ১০ | ✅ |
-| | **মোট** | **৮৪** | **১৩০** | |
-
----
-
-# 🎯 চূড়ান্ত সুপারিশ
-
-## গ্রেড: **B** | স্কোর: **৮৪/১৩০**
-
-### ⚠️ সতর্কতা (CAUTION) — ঝুঁকি আছে
-
-> এই প্রোডাক্টটি মাঝারি সুযোগ নিয়ে আসে। প্রফিট মার্জিন ভালো হলেও প্রতিযোগিতা এবং ডিফারেন্সিয়েশন চ্যালেঞ্জিং হতে পারে।
-
----
-
-## 📋 পরবর্তী ধাপ (Action Plan)
-
-| ধাপ | কাজ | টাইমলাইন |
-|-----|-----|----------|
-| ১ | ✅ স্যাম্পল অর্ডার (৩-৫ সাপ্লায়ার) | সপ্তাহ ১ |
-| ২ | ✅ কোয়ালিটি চেক ও তুলনা | সপ্তাহ ২ |
-| ৩ | ✅ ছোট ব্যাচ টেস্ট (৫০-১০০ ইউনিট) | সপ্তাহ ৩-৪ |
-| ৪ | ✅ PPC ক্যাম্পেইন লঞ্চ | সপ্তাহ ৫ |
-
----
-
-*📝 নোট: এটি একটি ডেমো রিপোর্ট। বাস্তব বিশ্লেষণের জন্য AI API কী সেট করুন।*
-`;
+interface AnthropicResponse {
+  id?: string;
+  type?: string;
+  content?: AnthropicContentBlock[];
+  error?: {
+    message: string;
+  };
 }
 
 /* ──────────────────── Fetch with timeout ──────────────────── */
@@ -150,7 +26,7 @@ function generateMockReport(messages: ChatMessage[]): string {
 async function fetchWithTimeout(
   url: string,
   options: RequestInit,
-  timeoutMs = 25000
+  timeoutMs = 55000
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -171,82 +47,95 @@ async function fetchWithTimeout(
   }
 }
 
-/* ──────────────────── Minimax (PRIMARY) ──────────────────── */
+/* ──────────────────── Minimax (PRIMARY) — Anthropic-compatible ──────────────────── */
 
 async function callMinimax(
   messages: ChatMessage[],
-  temperature = 0.7
+  temperature = 0.7,
+  maxTokens = 4000
 ): Promise<string> {
   if (!env.minimaxApiKey) {
-    throw new Error("MINIMAX_API_KEY not set in Vercel environment variables.");
+    throw new Error(
+      "MINIMAX_API_KEY not set in Vercel environment variables."
+    );
   }
 
-  console.log("[AI] Calling Minimax API...", {
-    baseUrl: env.minimaxBaseUrl,
+  console.log("[AI] Calling Minimax API (Anthropic format)...", {
     model: env.minimaxModel,
     apiKeyLength: env.minimaxApiKey.length,
   });
 
+  // Anthropic format: system is top-level, not a message
+  let systemPrompt = "";
+  const anthropicMessages: { role: "user" | "assistant"; content: string }[] = [];
+
+  for (const msg of messages) {
+    if (msg.role === "system") {
+      systemPrompt = msg.content;
+    } else {
+      anthropicMessages.push({ role: msg.role, content: msg.content });
+    }
+  }
+
+  const requestBody: Record<string, unknown> = {
+    model: env.minimaxModel,
+    max_tokens: maxTokens,
+    messages: anthropicMessages,
+    temperature,
+  };
+
+  if (systemPrompt) {
+    requestBody.system = systemPrompt;
+  }
+
   const response = await fetchWithTimeout(
-    `${env.minimaxBaseUrl}/chat/completions`,
+    `${env.minimaxBaseUrl}/v1/messages`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${env.minimaxApiKey}`,
+        "x-api-key": env.minimaxApiKey,
+        "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify({
-        model: env.minimaxModel,
-        messages,
-        temperature,
-      }),
+      body: JSON.stringify(requestBody),
     },
-    25000 // 25 second timeout
+    55000 // 55 second timeout (Vercel max is 60s for cron, 10s for HTTP)
   );
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Minimax API error (${response.status}): ${error}`);
+    const errorText = await response.text();
+    throw new Error(`Minimax API error (${response.status}): ${errorText}`);
   }
 
-  const data = (await response.json()) as OpenAIResponse;
-  const content = data.choices[0]?.message?.content || "";
+  const data = (await response.json()) as AnthropicResponse;
+
+  if (data.error) {
+    throw new Error(`Minimax API error: ${data.error.message}`);
+  }
+
+  const textContent = data.content?.find((c) => c.type === "text");
+  const content = textContent?.text || "";
   console.log("[AI] Minimax response received, length:", content.length);
   return content;
-}
-
-/* ──────────────────── Primary AI call ──────────────────── */
-
-async function callPrimaryAI(
-  messages: ChatMessage[],
-  temperature = 0.7
-): Promise<string> {
-  // Try Minimax first
-  try {
-    return await callMinimax(messages, temperature);
-  } catch (err: any) {
-    console.warn("[AI] Minimax failed, using mock mode:", err.message);
-    // If API fails, return mock report for demo purposes
-    return generateMockReport(messages);
-  }
 }
 
 /* ──────────────────── Public API ──────────────────── */
 
 export async function callAIWithFallback(
   messages: ChatMessage[],
-  temperature = 0.7
+  temperature = 0.7,
+  maxTokens = 4000
 ): Promise<string> {
-  return callPrimaryAI(messages, temperature);
+  // Only Minimax is supported. If it fails, the error propagates.
+  return callMinimax(messages, temperature, maxTokens);
 }
 
 export async function* callAIStream(
   messages: ChatMessage[],
-  temperature = 0.7
+  temperature = 0.7,
+  maxTokens = 4000
 ): AsyncGenerator<string, void, unknown> {
-  // For streaming, yield the full mock report at once
-  // (since we can't stream from a mock)
-  const result = await callPrimaryAI(messages, temperature);
+  const result = await callMinimax(messages, temperature, maxTokens);
   yield result;
 }
 
