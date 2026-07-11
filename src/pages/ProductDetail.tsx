@@ -4,6 +4,7 @@ import { useParams, Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,7 @@ import {
   BarChart3,
   Trash2,
   Loader2,
+  RotateCw,
 } from "lucide-react";
 
 const statusColors: Record<string, string> = {
@@ -52,10 +54,12 @@ export default function ProductDetail() {
 
   const updateMutation = trpc.product.update.useMutation();
   const deleteMutation = trpc.product.delete.useMutation();
+  const refreshMutation = trpc.product.refresh.useMutation();
   const utils = trpc.useUtils();
-
+ 
   const [isUpdating, setIsUpdating] = useState(false);
-
+  const [isRefreshing, setIsRefreshing] = useState(false);
+ 
   const handleStatusChange = async (newStatus: string) => {
     setIsUpdating(true);
     try {
@@ -70,7 +74,20 @@ export default function ProductDetail() {
       setIsUpdating(false);
     }
   };
-
+ 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshMutation.mutateAsync({ productId });
+      toast.success("প্রোডাক্ট ডাটা সফলভাবে রিফ্রেশ করা হয়েছে!");
+      utils.product.getById.invalidate({ id: productId });
+    } catch (error: any) {
+      toast.error(`রিফ্রেশ ব্যর্থ হয়েছে: ${error.message || "Unknown error"}`);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+ 
   const handleDelete = async () => {
     if (!confirm("আপনি কি এই প্রোডাক্টটি ডিলিট করতে চান?")) return;
     try {
@@ -138,6 +155,19 @@ export default function ProductDetail() {
             </div>
           </div>
           <div className="flex gap-3">
+            <Button
+              variant="outline"
+              disabled={isRefreshing}
+              onClick={handleRefresh}
+              className="rounded-xl flex items-center gap-1.5"
+            >
+              {isRefreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCw className="h-4 w-4" />
+              )}
+              ডাটা রিফ্রেশ
+            </Button>
             <Select
               value={product.status || "researching"}
               onValueChange={handleStatusChange}

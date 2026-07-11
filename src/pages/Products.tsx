@@ -6,6 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -20,6 +30,9 @@ import {
   Filter,
   ArrowRight,
   FolderOpen,
+  FileUp,
+  Upload,
+  Loader2,
 } from "lucide-react";
 
 const statusColors: Record<string, string> = {
@@ -39,11 +52,50 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function Products() {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
   const { data: products, isLoading } = trpc.product.list.useQuery();
   const { data: folders } = trpc.product.listFolders.useQuery();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // CSV Import state
+  const [csvText, setCsvText] = useState("");
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const bulkImportMutation = trpc.product.bulkImport.useMutation();
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      setCsvText(text);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportSubmit = async () => {
+    if (!csvText.trim()) {
+      toast.error("অনুগ্রহ করে কিছু CSV টেক্সট লিখুন বা ফাইল আপলোড করুন।");
+      return;
+    }
+    setIsImporting(true);
+    try {
+      const resp = await bulkImportMutation.mutateAsync({ csvContent: csvText });
+      toast.success(`${resp.count}টি প্রোডাক্ট সফলভাবে ইম্পোর্ট করা হয়েছে!`);
+      setIsImportOpen(false);
+      setCsvText("");
+      utils.product.list.invalidate();
+    } catch (err: any) {
+      toast.error(`ইম্পোর্ট ব্যর্থ হয়েছে: ${err.message || "Unknown error"}`);
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const filteredProducts = products?.filter((p) => {
     const matchesSearch =
@@ -68,12 +120,64 @@ export default function Products() {
               সেভ করা সব প্রোডাক্ট ও রিসার্চ
             </p>
           </div>
-          <Link to="/research">
-            <Button className="bg-blue-600 hover:bg-blue-700 rounded-full">
-              <Plus className="h-4 w-4 mr-2" />
-              নতুন রিসার্চ
-            </Button>
-          </Link>
+          <div className="flex gap-3">
+            {(user as any)?.experienceLevel === "advanced" && (
+              <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="rounded-full">
+                    <FileUp className="h-4 w-4 mr-2" />
+                    CSV বাল্ক ইম্পোর্ট
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                      <Upload className="h-5 w-5 text-blue-600" />
+                      প্রোডাক্ট বাল্ক ইম্পোর্ট (CSV)
+                    </DialogTitle>
+                    <DialogDescription className="text-slate-500 text-xs">
+                      Keepa বা Helium10 থেকে এক্সপোর্ট করা প্রোডাক্ট ফাইল ইম্পোর্ট করুন। নিচের ফরম্যাট অনুসরণ করুন:
+                      <code className="block mt-2 p-2 bg-slate-100 dark:bg-slate-800 rounded font-mono text-[10px] text-slate-700 dark:text-slate-300">
+                        asin,price,bsr,reviews,title,marketplace,category,weight
+                      </code>
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 my-4">
+                    <div>
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">CSV ফাইল সিলেক্ট করুন</label>
+                      <Input type="file" accept=".csv" onChange={handleFileUpload} className="h-10 rounded-xl" />
+                    </div>
+                    <div className="relative flex justify-center text-xs text-slate-400">
+                      <span className="bg-white dark:bg-slate-900 px-2">অথবা সরাসরি পেস্ট করুন</span>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">CSV ডাটা পেস্ট করুন</label>
+                      <textarea
+                        value={csvText}
+                        onChange={(e) => setCsvText(e.target.value)}
+                        placeholder="asin,price,bsr,reviews...&#10;B08N5WRWNW,29.99,15000,120..."
+                        rows={6}
+                        className="w-full p-3 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-xl bg-transparent focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800 pt-4">
+                    <Button variant="ghost" onClick={() => setIsImportOpen(false)} disabled={isImporting} className="rounded-full">বাতিল</Button>
+                    <Button onClick={handleImportSubmit} disabled={isImporting} className="bg-blue-600 hover:bg-blue-700 text-white rounded-full">
+                      {isImporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                      ইম্পোর্ট করুন
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+            <Link to="/research">
+              <Button className="bg-blue-600 hover:bg-blue-700 rounded-full">
+                <Plus className="h-4 w-4 mr-2" />
+                নতুন রিসার্চ
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Filters */}

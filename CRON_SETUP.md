@@ -1,7 +1,7 @@
 # Cron-Jobs.org Setup Guide for AMZ Product Gem
 
 ## 1. Cron-Jobs.org API Key
-Your API key: `WJnmdRwO6iHDH7NIlyYadsQzniVxFctEDLKVZEtExoE=`
+Your API key: `<CRON_JOBS_ORG_API_KEY>` (Configure in Vercel/local environment variables)
 
 ## 2. Cron Jobs to Create
 

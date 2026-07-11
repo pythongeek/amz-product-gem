@@ -64,4 +64,8 @@ export const env = {
   kimiAuthUrl: process.env.KIMI_AUTH_URL ?? "https://auth.kimi.com",
   kimiOpenUrl: process.env.KIMI_OPEN_URL ?? "https://open.kimi.com",
   ownerUnionId: process.env.OWNER_UNION_ID ?? "",
+  awsAccessKey: process.env.AWS_ACCESS_KEY || "",
+  awsSecretKey: process.env.AWS_SECRET_KEY || "",
+  associateTag: process.env.ASSOCIATE_TAG || "",
+  awsRegion: process.env.AWS_REGION || "us-east-1",
 };

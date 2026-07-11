@@ -10,8 +10,14 @@ import { Badge } from "@/components/ui/badge";
 import ReportViewer from "@/components/ReportViewer";
 import {
   ArrowLeft, Save, FileText, TrendingUp, CheckCircle, Loader2, Sparkles,
-  BarChart3, DollarSign, Clock, AlertTriangle, XCircle, Zap, Shield,
+  BarChart3, DollarSign, Clock, AlertTriangle, XCircle, Zap, Shield, Info
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function ResearchResults() {
   const location = useLocation();
@@ -100,19 +106,84 @@ export default function ResearchResults() {
   const fullReportMarkdown = report || jobStatus?.result || "";
 
   const scoreItems = scores ? [
-    { label: "প্রাইজ রেঞ্জ", score: scores.priceScore || 7, icon: DollarSign },
-    { label: "সাইজ/ওজন", score: scores.sizeWeightScore || 8, icon: BarChart3 },
-    { label: "মার্কেট সাইজ", score: scores.marketSizeScore || 7, icon: TrendingUp },
-    { label: "রিভিউ ব্যারিয়ার", score: scores.reviewBarrierScore || 6, icon: CheckCircle },
-    { label: "ডিফারেন্সিয়েশন", score: scores.differentiationScore || 7, icon: Sparkles },
-    { label: "সিজনালিটি", score: scores.seasonalityScore || 7, icon: Clock },
-    { label: "কমপ্লেক্সিটি", score: scores.complexityScore || 7, icon: Zap },
-    { label: "রিটার্ন রেট", score: scores.returnRateScore || 7, icon: AlertTriangle },
-    { label: "ব্র্যান্ড ডোমিনেন্স", score: scores.brandDominanceScore || 6, icon: BarChart3 },
-    { label: "ট্রেন্ড", score: scores.trendScore || 7, icon: TrendingUp },
-    { label: "ডিফেন্সিবিলিটি", score: scores.defensibilityScore || 7, icon: Shield },
-    { label: "ম্যানুফ্যাকচারেবিলিটি", score: scores.manufacturabilityScore || 7, icon: Zap },
-    { label: "নেট মার্জিন", score: scores.marginScore || 7, icon: DollarSign },
+    {
+      label: "প্রাইজ রেঞ্জ",
+      score: scores.priceScore || 7,
+      icon: DollarSign,
+      tooltipText: "সুইট স্পট $২০-৩৫। $১৫ এর নিচে ফি বেশি কাটে, $৫০ এর ওপরে রিটার্ন রিস্ক ও যাচাইকরণ বেশি লাগে।"
+    },
+    {
+      label: "সাইজ/ওজন",
+      score: scores.sizeWeightScore || 8,
+      icon: BarChart3,
+      tooltipText: "স্মল স্ট্যান্ডার্ড সাইজ (<১ পাউন্ড আদর্শ, ৩ পাউন্ড সর্বোচ্চ) সবচেয়ে সস্তা FBA ফি এর জন্য।"
+    },
+    {
+      label: "মার্কেট সাইজ",
+      score: scores.marketSizeScore || 7,
+      icon: TrendingUp,
+      tooltipText: "BSR ৫০,০০০ এর নিচে থাকলে ভালো মার্কেট ডিমান্ড নির্দেশ করে।"
+    },
+    {
+      label: "রিভিউ ব্যারিয়ার",
+      score: scores.reviewBarrierScore || 6,
+      icon: CheckCircle,
+      tooltipText: "কম্পিটিটরদের রিভিউ সংখ্যা ১৫০ এর নিচে হওয়া আদর্শ, ৫০০ এর ওপরের রিভিউ অতিক্রম করা কঠিন।"
+    },
+    {
+      label: "ডিফারেন্সিয়েশন",
+      score: scores.differentiationScore || 7,
+      icon: Sparkles,
+      tooltipText: "নেগেটিভ রিভিউ পড়ে প্রোডাক্টে অন্তত ২-৩টি উন্নয়ন করার সুযোগ থাকা উচিত।"
+    },
+    {
+      label: "সিজনালিটি",
+      score: scores.seasonalityScore || 7,
+      icon: Clock,
+      tooltipText: "সারা বছর চাহিদা থাকে এমন প্রোডাক্ট নির্বাচন করুন। ৬ সপ্তাহের ট্রেন্ডি প্রোডাক্ট এড়িয়ে চলুন।"
+    },
+    {
+      label: "কমপ্লেক্সিটি",
+      score: scores.complexityScore || 7,
+      icon: Zap,
+      tooltipText: "সহজ, ব্যাটারিহীন ও ভঙ্গুর নয় এমন প্রোডাক্ট বেছে নিন।"
+    },
+    {
+      label: "রিটার্ন রেট",
+      score: scores.returnRateScore || 7,
+      icon: AlertTriangle,
+      tooltipText: "কাঁচ, ইলেকট্রনিক্স ও ক্লোথিং ক্যাটাগরিতে রিটার্ন রেট বেশি থাকে, সাধারণ প্রোডাক্টের রিটার্ন রেট কম।"
+    },
+    {
+      label: "ব্র্যান্ড ডোমিনেন্স",
+      score: scores.brandDominanceScore || 6,
+      icon: BarChart3,
+      tooltipText: "কোনো একক ব্র্যান্ডের পেজ ১-এ ৪০% এর বেশি দখল থাকা উচিত নয়।"
+    },
+    {
+      label: "ট্রেন্ড",
+      score: scores.trendScore || 7,
+      icon: TrendingUp,
+      tooltipText: "গত ২৪ মাসের গুগল ট্রেন্ড গ্রাফ সোজা বা ওপরের দিকে থাকা প্রোডাক্টগুলো ভালো।"
+    },
+    {
+      label: "ডিফেন্সিবিলিটি",
+      score: scores.defensibilityScore || 7,
+      icon: Shield,
+      tooltipText: "প্রোডাক্টের পেটেন্ট, ইউনিক প্যাকেজিং বা কাস্টম বান্ডেল ডিফেন্স তৈরি করে।"
+    },
+    {
+      label: "ম্যানুফ্যাকচারেবিলিটি",
+      score: scores.manufacturabilityScore || 7,
+      icon: Zap,
+      tooltipText: "Alibaba-তে একাধিক গোল্ড/ভেরিফাইড সাপ্লায়ার থাকা প্রোডাক্ট দ্রুত তৈরি করা যায়।"
+    },
+    {
+      label: "নেট মার্জিন",
+      score: scores.marginScore || 7,
+      icon: DollarSign,
+      tooltipText: "সব ফি বাদ দিয়ে মার্জিন ন্যূনতম ২৫-৩০% হওয়া আবশ্যক।"
+    },
   ] : [];
 
   const totalScore = scores?.totalScore || 0;
@@ -239,7 +310,19 @@ export default function ResearchResults() {
                           <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-1.5">
                               <Icon className="h-3.5 w-3.5 text-slate-400" />
-                              <span className="text-xs text-slate-600">{item.label}</span>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-xs text-slate-600 cursor-help border-b border-dashed border-slate-300 dark:border-slate-600 flex items-center gap-0.5">
+                                      {item.label}
+                                      <Info className="h-3 w-3 text-slate-400" />
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="bg-slate-900 dark:bg-slate-800 text-white dark:text-slate-100 p-3 rounded-lg max-w-[250px] text-xs shadow-xl border border-slate-700">
+                                    <p>{item.tooltipText}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </div>
                             <span className="text-xs font-semibold text-slate-700">{item.score}/10</span>
                           </div>

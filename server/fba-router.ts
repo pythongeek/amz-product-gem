@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { fbaCalculations } from "@db/schema";
+import { fbaCalculations, kbFeeRates } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { matchFeeRate } from "./queries/knowledge-base";
 
@@ -199,4 +199,12 @@ export const fbaRouter = createRouter({
         .where(eq(fbaCalculations.productId, input.productId))
         .orderBy(fbaCalculations.createdAt);
     }),
+
+  listRates: authedQuery.query(async () => {
+    const db = getDb();
+    return db
+      .select()
+      .from(kbFeeRates)
+      .orderBy(kbFeeRates.feeType, kbFeeRates.marketplace);
+  }),
 });

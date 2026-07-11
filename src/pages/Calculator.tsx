@@ -1,6 +1,7 @@
 import { ProtectedLayout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,6 +54,7 @@ const sizeTiers = [
 ];
 
 export default function Calculator() {
+  const { user } = useAuth();
   const [sellingPrice, setSellingPrice] = useState("29.99");
   const [productCost, setProductCost] = useState("7.00");
   const [shippingCost, setShippingCost] = useState("1.50");
@@ -68,6 +70,9 @@ export default function Calculator() {
   const [stressDialogOpen, setStressDialogOpen] = useState(false);
 
   const calculateMutation = trpc.fba.calculate.useMutation();
+  const { data: rates } = trpc.fba.listRates.useQuery(undefined, {
+    enabled: (user as any)?.experienceLevel === "advanced",
+  });
 
   const handleCalculate = async () => {
     setIsCalculating(true);
@@ -499,13 +504,15 @@ export default function Calculator() {
                 </Card>
 
                 {/* Margin Stress Test Button */}
-                <Button
-                  onClick={() => setStressDialogOpen(true)}
-                  className="w-full h-12 text-md font-semibold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-lg"
-                >
-                  <ShieldAlert className="h-5 w-5 mr-2" />
-                  মার্জিন স্ট্রেস টেস্ট (Margin Stress Test)
-                </Button>
+                {(user as any)?.experienceLevel === "advanced" && (
+                  <Button
+                    onClick={() => setStressDialogOpen(true)}
+                    className="w-full h-12 text-md font-semibold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-lg"
+                  >
+                    <ShieldAlert className="h-5 w-5 mr-2" />
+                    মার্জিন স্ট্রেস টেস্ট (Margin Stress Test)
+                  </Button>
+                )}
               </>
             ) : (
               <Card className="border-0 shadow-lg">
@@ -522,6 +529,43 @@ export default function Calculator() {
             )}
           </div>
         </div>
+
+        {/* Fee assumptions panel for pros */}
+        {(user as any)?.experienceLevel === "advanced" && rates && rates.length > 0 && (
+          <Card className="border-0 shadow-xl mt-8 bg-white dark:bg-slate-800">
+            <CardHeader>
+              <CardTitle className="text-lg">বর্তমান ফি ডাটাবেজ (Fee Assumptions Audit)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-slate-500 dark:text-slate-400">
+                  <thead className="text-xs text-slate-700 dark:text-slate-300 uppercase bg-slate-50 dark:bg-slate-700/50">
+                    <tr>
+                      <th className="px-4 py-3">মার্কেটপ্লেস</th>
+                      <th className="px-4 py-3">ফি টাইপ</th>
+                      <th className="px-4 py-3">ক্যাটাগরি/সাইজ</th>
+                      <th className="px-4 py-3">রেট ভ্যালু</th>
+                      <th className="px-4 py-3">নোটস</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rates.map((r: any) => (
+                      <tr key={r.id} className="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">{r.marketplace}</td>
+                        <td className="px-4 py-3 font-mono text-xs">{r.feeType}</td>
+                        <td className="px-4 py-3">{r.category || r.sizeTier || "—"}</td>
+                        <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">
+                          {r.rateType === "percent" ? `${(Number(r.rateValue) * 100).toFixed(1)}%` : `$${Number(r.rateValue).toFixed(2)}`}
+                        </td>
+                        <td className="px-4 py-3 text-xs">{r.notes || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Stress Test Dialog */}

@@ -16,6 +16,14 @@ app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 // Health check
 app.get("/api/health", (c) => c.json({ status: "ok", time: new Date().toISOString() }));
 
+// Gate debug routes in production
+app.use("/api/debug/*", async (c, next) => {
+  if (env.isProduction) {
+    return c.json({ ok: false, error: "Forbidden in production" }, 403);
+  }
+  await next();
+});
+
 // DB diagnostic
 app.get("/api/debug/db", async (c) => {
   if (env.isProduction) return c.json({ ok: false, error: "Forbidden in production" }, 403);

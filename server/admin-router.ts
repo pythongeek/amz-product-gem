@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import { signAdminToken, verifyAdminToken } from "./lib/admin-auth";
 import { TRPCError } from "@trpc/server";
 import { clearKbCache } from "./queries/knowledge-base";
+import { env } from "./lib/env";
 
 export const adminAuthRouter = createRouter({
   login: publicQuery
@@ -96,7 +97,20 @@ export const adminAuthRouter = createRouter({
   // Seed endpoint — creates or resets the default admin (public, idempotent)
   ensureDefaultAdmin: publicQuery.mutation(async () => {
     const db = getDb();
-    const hash = await bcrypt.hash("admin123", 12);
+    let adminPassword = process.env.ADMIN_PASSWORD;
+
+    if (env.isProduction) {
+      if (!adminPassword || adminPassword === "admin123") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "CRITICAL SECURITY ERROR: ADMIN_PASSWORD environment variable must be set to a secure value in production to seed the admin account!",
+        });
+      }
+    } else {
+      adminPassword = adminPassword || "admin123";
+    }
+
+    const hash = await bcrypt.hash(adminPassword, 12);
 
     const existing = await db
       .select()
@@ -105,12 +119,12 @@ export const adminAuthRouter = createRouter({
       .limit(1);
 
     if (existing.length > 0) {
-      // Reset password to the known hash (fixes broken dummy hashes)
+      // Reset password to the configured/new hash
       await db
         .update(adminCredentials)
         .set({ passwordHash: hash, isActive: true })
         .where(eq(adminCredentials.username, "admin"));
-      return { created: false, reset: true, message: "Default admin password reset to: admin123" };
+      return { created: false, reset: true, message: "Default admin password updated successfully." };
     }
 
     await db.insert(adminCredentials).values({
@@ -120,7 +134,7 @@ export const adminAuthRouter = createRouter({
       isActive: true,
     });
 
-    return { created: true, message: "Default admin created: username=admin, password=admin123" };
+    return { created: true, message: "Default admin created successfully." };
   }),
 
   listRates: adminQuery.query(async () => {

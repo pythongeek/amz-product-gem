@@ -2,7 +2,7 @@
 # cron-jobs.org immediate research trigger script
 # This script processes pending research requests
 
-API_KEY="WJnmdRwO6iHDH7NIlyYadsQzniVxFctEDLKVZEtExoE="
+API_KEY="${CRON_JOBS_ORG_API_KEY:-YOUR_CRON_JOBS_ORG_API_KEY}"
 API_URL="https://cron-job.org"
 
 # Check for pending research requests
