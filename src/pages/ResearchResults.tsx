@@ -3,6 +3,7 @@ import { trpc } from "@/providers/trpc";
 import { useLocation, useNavigate } from "react-router";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,11 +19,13 @@ import {
   DollarSign,
   Globe,
   Clock,
+  Info,
 } from "lucide-react";
 
 export default function ResearchResults() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { result, searchConfig } = location.state || {};
 
   const [isSaving, setIsSaving] = useState(false);
@@ -33,7 +36,6 @@ export default function ResearchResults() {
   const [pollError, setPollError] = useState("");
 
   const saveMutation = trpc.product.create.useMutation();
-  const validateMutation = trpc.analysis.validateProduct.useMutation();
   const reportMutation = trpc.analysis.generateReport.useMutation();
   const getJobStatus = trpc.job.getJobStatus.useQuery(
     { jobId: result?.jobId },
@@ -280,6 +282,15 @@ export default function ResearchResults() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
+                    {(user as any)?.experienceLevel === "beginner" && (
+                      <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-xl text-sm flex items-start gap-3">
+                        <Info className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+                        <div>
+                          <span className="font-bold text-yellow-800 dark:text-yellow-400 block mb-0.5">🔰 বিগিনার হান্টার গাইড</span>
+                          আপনার অভিজ্ঞতা লেভেল <b>Beginner</b> সেট করা আছে। জটিল ম্যানুফ্যাকচারিং ও পেটেন্ট ঝামেলার এনালাইসিসগুলো নিচে আংশিক সংকুচিত করা হয়েছে। আপনার সেটিংস থেকে এটি পরিবর্তন করতে পারেন।
+                        </div>
+                      </div>
+                    )}
                     <div className="prose dark:prose-invert max-w-none">
                       <div className="whitespace-pre-wrap text-slate-700 dark:text-slate-300 leading-relaxed">
                         {jobStatus?.result || "রিপোর্ট এখনো প্রস্তুত হয়নি।"}
@@ -323,34 +334,55 @@ export default function ResearchResults() {
                         </div>
 
                         {/* Score Breakdown */}
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                           {[
-                            { label: "প্রাইজ রেঞ্জ ($15-$50)", score: scores.priceScore || 7 },
-                            { label: "সাইজ ও ওজন", score: scores.sizeWeightScore || 8 },
-                            { label: "মার্কেট সাইজ", score: scores.marketSizeScore || 7 },
-                            { label: "রিভিউ ব্যারিয়ার", score: scores.reviewBarrierScore || 6 },
-                            { label: "ডিফারেন্সিয়েশন", score: scores.differentiationScore || 7 },
-                            { label: "সিজনালিটি", score: scores.seasonalityScore || 7 },
-                            { label: "কমপ্লেক্সিটি", score: scores.complexityScore || 7 },
-                            { label: "রিটার্ন রেট", score: scores.returnRateScore || 7 },
-                            { label: "ব্র্যান্ড ডোমিনেন্স", score: scores.brandDominanceScore || 6 },
-                            { label: "ট্রেন্ড", score: scores.trendScore || 7 },
-                            { label: "ডিফেন্সিবিলিটি", score: scores.defensibilityScore || 7 },
-                            { label: "ম্যানুফ্যাকচারেবিলিটি", score: scores.manufacturabilityScore || 7 },
-                            { label: "নেট মার্জিন", score: scores.marginScore || 7 },
-                          ].map((item) => (
-                            <div key={item.label}>
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-sm text-slate-600 dark:text-slate-300">
-                                  {item.label}
-                                </span>
-                                <span className="text-sm font-semibold text-slate-800 dark:text-white">
-                                  {item.score}/10
-                                </span>
+                            { label: "প্রাইজ রেঞ্জ ($15-$50)", score: scores.priceScore || 7, isAdvanced: false },
+                            { label: "সাইজ ও ওজন", score: scores.sizeWeightScore || 8, isAdvanced: false },
+                            { label: "মার্কেট সাইজ", score: scores.marketSizeScore || 7, isAdvanced: false },
+                            { label: "রিভিউ ব্যারিয়ার", score: scores.reviewBarrierScore || 6, isAdvanced: false },
+                            { label: "ডিফারেন্সিয়েশন", score: scores.differentiationScore || 7, isAdvanced: false },
+                            { label: "সিজনালিটি", score: scores.seasonalityScore || 7, isAdvanced: false },
+                            { label: "কমপ্লেক্সিটি", score: scores.complexityScore || 7, isAdvanced: true, tip: "ইলেকট্রনিক্স/ব্যাটারি/ভঙ্গুর উপাদানের আইনি ও লজিস্টিক জটিলতা" },
+                            { label: "রিটার্ন রেট", score: scores.returnRateScore || 7, isAdvanced: true, tip: "ভঙ্গুর ও ফিটিং সংক্রান্ত প্রোডাক্টে কাস্টমার রিটার্নের হার" },
+                            { label: "ব্র্যান্ড ডোমিনেন্স", score: scores.brandDominanceScore || 6, isAdvanced: false },
+                            { label: "ট্রেন্ড", score: scores.trendScore || 7, isAdvanced: false },
+                            { label: "ডিফেন্সিবিলিটি", score: scores.defensibilityScore || 7, isAdvanced: true, tip: "অন্য সেলারদের কপি করা প্রতিহত করার পেটেন্ট/ট্রেডমার্ক সক্ষমতা" },
+                            { label: "ম্যানুফ্যাকচারেবিলিটি", score: scores.manufacturabilityScore || 7, isAdvanced: true, tip: "ফ্যাক্টরি সোর্সিং ও মোল্ড কাস্টমাইজেশন রিকোয়ারমেন্ট" },
+                            { label: "নেট মার্জিন", score: scores.marginScore || 7, isAdvanced: false },
+                          ].map((item) => {
+                            const isLocked = (user as any)?.experienceLevel === "beginner" && item.isAdvanced;
+
+                            return (
+                              <div 
+                                key={item.label} 
+                                className={`relative p-2 rounded-lg transition-all ${
+                                  isLocked ? "opacity-50 select-none bg-slate-50 dark:bg-slate-900/50" : ""
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-sm font-medium text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                                    {item.label}
+                                    {isLocked && (
+                                      <span className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-950/40 px-2 py-0.5 rounded-full font-bold">
+                                        🔒 লকড (Beginner)
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="text-sm font-semibold text-slate-800 dark:text-white">
+                                    {isLocked ? "--" : `${item.score}/10`}
+                                  </span>
+                                </div>
+                                
+                                {isLocked ? (
+                                  <div className="text-xs text-slate-400 dark:text-slate-500 italic mt-1">
+                                    {item.tip} (এটি দেখতে সেটিংস থেকে ইন্টারমিডিয়েট/অ্যাডভান্সড নির্বাচন করুন)
+                                  </div>
+                                ) : (
+                                  <Progress value={item.score * 10} className="h-2" />
+                                )}
                               </div>
-                              <Progress value={item.score * 10} className="h-2" />
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     ) : (

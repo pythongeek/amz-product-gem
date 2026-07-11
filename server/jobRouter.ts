@@ -1,8 +1,7 @@
 import { z } from "zod";
-import { createRouter, authedQuery, publicQuery } from "./middleware";
-import { callAIWithFallback, BANGLA_SYSTEM_PROMPT } from "./lib/ai";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { reports, researchJobs } from "@db/schema";
+import { researchJobs } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 
 export const jobRouter = createRouter({

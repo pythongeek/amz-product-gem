@@ -2,10 +2,12 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { env } from "./lib/env";
 import { getDb } from "./queries/connection";
-import { researchJobs, reports, products, productScores, alerts } from "@db/schema";
+import { researchJobs, reports, products, productScores, alerts, productSnapshots } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
-import { callAIWithFallback, BANGLA_SYSTEM_PROMPT } from "./lib/ai";
+import { callAIWithFallback, buildGroundedSystemPrompt } from "./lib/ai";
 import { TRPCError } from "@trpc/server";
+import { scoreProduct, extractSpecsFromReport } from "./lib/scoring";
+import { appRouter } from "./router";
 
 /**
  * Hono router for PUBLIC cron endpoints.
@@ -56,8 +58,100 @@ cronApp.post("/process-research", async (c) => {
     .where(eq(researchJobs.id, job.id));
 
   try {
+    const isManual = job.inputType === "manual";
+    let manualData = null;
+    if (isManual) {
+      try {
+        manualData = JSON.parse(job.input);
+      } catch (e) {
+        console.error("Failed to parse manual job input:", e);
+      }
+    }
+
     // Build the research prompt with structured format requirements
-    const prompt = job.inputType === "url"
+    const prompt = isManual
+      ? `🔍 **ম্যানুয়াল প্রোডাক্ট এন্ট্রি**:
+প্রোডাক্ট নাম: ${manualData.title}
+ASIN: ${manualData.asin}
+মূল্য: ${manualData.price}
+ওজন: ${manualData.weight} lbs
+BSR: ${manualData.bsr}
+রিভিউ: ${manualData.reviewCount}
+রেটিং: ${manualData.rating}
+সেলার সংখ্যা: ${manualData.sellerCount}
+ক্যাটাগরি: ${manualData.category || "General"}
+বৈশিষ্ট্য: ${[
+        manualData.hasBattery ? "ব্যাটারি আছে" : "",
+        manualData.isElectronic ? "ইলেকট্রনিক্স" : "",
+        manualData.isFragile ? "ভঙ্গুর" : "",
+      ].filter(Boolean).join(", ") || "স্ট্যান্ডার্ড"}
+
+আপনাকে একটি বিস্তারিত Amazon FBA রিসার্চ রিপোর্ট তৈরি করতে হবে। নিচের ফরম্যাট অনুসরণ করুন:
+
+# 📋 রিপোর্ট ওভারভিউ
+- প্রোডাক্ট নাম ও সংক্ষিপ্ত বিবরণ: ${manualData.title} (ASIN: ${manualData.asin})
+- মার্কেটপ্লেস: ${job.marketplace}
+- বিশ্লেষণ তারিখ: ${new Date().toLocaleDateString('bn-BD')}
+
+# 📊 মার্কেট অ্যানালাইসিস
+| মেট্রিক | ভ্যালু | মন্তব্য |
+|---------|--------|--------|
+| মার্কেট সাইজ | | BSR: ${manualData.bsr} |
+| সিজনালিটি | | |
+| ট্রেন্ড | | |
+| চাহিদা স্কোর | /১০ | |
+
+# ⚔️ কম্পিটিশন অ্যানালাইসিস
+| মেট্রিক | ভ্যালু | মন্তব্য |
+|---------|--------|--------|
+| সেলার সংখ্যা | ${manualData.sellerCount} | |
+| অ্যাভারেজ রিভিউ | ${manualData.reviewCount} | |
+| ব্র্যান্ড ডোমিনেন্স | | |
+| এন্ট্রি ব্যারিয়ার | /১০ | |
+
+# 💰 প্রফিটাবিলিটি অ্যানালাইসিস
+|---------|--------|--------|
+| এস্টিমেটেড প্রাইজ | ${manualData.price} | |
+| FBA ফি | | |
+| সোর্সিং কস্ট | | |
+| নেট মার্জিন | % | |
+| মাসিক সেলস | | |
+
+# ⚠️ রিস্ক অ্যানালাইসিস
+- 🔴 হাই রিস্ক: ${manualData.isFragile ? "কাঁচ/ভঙ্গুর হওয়ার ঝুঁকি" : ""}
+- 🟡 মিডিয়াম রিস্ক: ${manualData.isElectronic ? "ইলেকট্রনিক্স হওয়ার ঝুঁকি" : ""}
+- 🟢 লো রিস্ক: ${!manualData.isFragile && !manualData.isElectronic ? "কম জটিল প্রোডাক্ট" : ""}
+
+# 🏆 ১৩-পয়েন্ট ভ্যালিডেশন স্কোর
+| # | ক্রাইটেরিয়া | স্কোর | ম্যাক্স |
+|---|-------------|-------|--------|
+| ১ | প্রাইজ স্কোর | /১০ | ১০ |
+| ২ | সাইজ/ওয়েট | /১০ | ১০ |
+| ৩ | মার্কেট সাইজ | /১০ | ১০ |
+| ৪ | রিভিউ ব্যারিয়ার | /১০ | ১০ |
+| ৫ | ডিফারেন্সিয়েশন | /১০ | ১০ |
+| ৬ | সিজনালিটি | /১০ | ১০ |
+| ৭ | কমপ্লেক্সিটি | /১০ | ১০ |
+| ৮ | রিটার্ন রেট | /১০ | ১০ |
+| ৯ | ব্র্যান্ড ডোমিনেন্স | /১০ | ১০ |
+| ১০ | ট্রেন্ড | /১০ | ১০ |
+| ১১ | ডিফেন্সিবিলিটি | /১০ | ১০ |
+| ১২ | ম্যানুফ্যাকচারেবিলিটি | /১০ | ১০ |
+| ১৩ | মার্জিন | /১০ | ১০ |
+| | **মোট** | **/১৩০** | **১৩০** |
+
+# 🎯 চূড়ান্ত সুপারিশ
+**গ্রেড: [A/B/C]** | **স্কোর: /১৩০**
+
+## 📋 পরবর্তী ধাপ (Action Plan)
+১. 
+২. 
+৩. 
+৪. 
+
+---
+*রিপোর্ট জেনারেটেড: ${new Date().toLocaleDateString('bn-BD')}*`
+      : job.inputType === "url"
       ? `🔍 **প্রোডাক্ট**: ${job.input}
 
 আপনাকে একটি বিস্তারিত Amazon FBA রিসার্চ রিপোর্ট তৈরি করতে হবে। নিচের ফরম্যাট অনুসরণ করুন:
@@ -195,43 +289,39 @@ cronApp.post("/process-research", async (c) => {
 ---
 *রিপোর্ট জেনারেটেড: ${new Date().toLocaleDateString('bn-BD')}*`;
 
+    const systemPrompt = await buildGroundedSystemPrompt(job.marketplace || "US");
     const result = await callAIWithFallback([
-      { role: "system", content: BANGLA_SYSTEM_PROMPT },
+      { role: "system", content: systemPrompt },
       { role: "user", content: prompt },
     ]);
 
-    // Generate 13-point scores
-    const scores = {
-      priceScore: Math.floor(Math.random() * 5) + 5,
-      sizeWeightScore: Math.floor(Math.random() * 4) + 6,
-      marketSizeScore: Math.floor(Math.random() * 5) + 4,
-      reviewBarrierScore: Math.floor(Math.random() * 5) + 4,
-      differentiationScore: Math.floor(Math.random() * 5) + 4,
-      seasonalityScore: Math.floor(Math.random() * 4) + 5,
-      complexityScore: Math.floor(Math.random() * 5) + 4,
-      returnRateScore: Math.floor(Math.random() * 4) + 5,
-      brandDominanceScore: Math.floor(Math.random() * 5) + 4,
-      trendScore: Math.floor(Math.random() * 4) + 5,
-      defensibilityScore: Math.floor(Math.random() * 4) + 5,
-      manufacturabilityScore: Math.floor(Math.random() * 5) + 4,
-      marginScore: Math.floor(Math.random() * 5) + 4,
-    };
-    const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
-    const grade = totalScore >= 100 ? "A" : totalScore >= 70 ? "B" : "C";
-    const recommendation =
-      grade === "A"
-        ? "যান (GO) — ভাল সুযোগ"
-        : grade === "B"
-        ? "সতর্কতা (CAUTION) — ঝুঁকি আছে"
-        : "বর্জন (FAIL) — এড়িয়ে চলুন";
+    // Generate 13-point scores from the generated report
+    const specs = isManual ? {
+      price: Number(manualData.price),
+      weight: Number(manualData.weight || 1),
+      bsr: Number(manualData.bsr),
+      reviewCount: Number(manualData.reviewCount),
+      sellerCount: Number(manualData.sellerCount),
+      category: manualData.category || "most_categories",
+      hasBattery: !!manualData.hasBattery,
+      isElectronic: !!manualData.isElectronic,
+      isFragile: !!manualData.isFragile,
+    } : extractSpecsFromReport(result);
+
+    const { scores, totalScore, grade, recommendation } = await scoreProduct(specs);
 
     // Create a product first (so report has a valid productId FK)
     const [product] = await db
       .insert(products)
       .values({
         userId: job.userId || undefined,
-        asin: "RESEARCH-" + job.id,
-        title: job.input,
+        asin: isManual ? manualData.asin : ("RESEARCH-" + job.id),
+        title: isManual ? manualData.title : job.input,
+        price: isManual ? String(manualData.price) : null,
+        bsr: isManual ? manualData.bsr : null,
+        reviewCount: isManual ? manualData.reviewCount : null,
+        rating: isManual ? String(manualData.rating) : null,
+        sellerCount: isManual ? manualData.sellerCount : null,
         marketplace: job.marketplace || "US",
         status: "researching",
       })
@@ -277,8 +367,16 @@ cronApp.post("/process-research", async (c) => {
 
 // ── 2. Check Product Alerts ──────────────────────────────────────
 cronApp.post("/check-alerts", async (c) => {
-  // Placeholder — your existing alert logic
-  return c.json({ ok: true, message: "Alert check triggered (implement your alert logic here)" });
+  try {
+    const caller = appRouter.createCaller({
+      req: c.req.raw,
+      resHeaders: new Headers(),
+    });
+    const result = await caller.alert.checkChanges({ cronSecret: env.cronSecret });
+    return c.json({ ok: true, ...result });
+  } catch (err: any) {
+    return c.json({ ok: false, error: err.message }, 500);
+  }
 });
 
 // ── 3. Setup Cron Jobs (one-time admin endpoint) ─────────────────

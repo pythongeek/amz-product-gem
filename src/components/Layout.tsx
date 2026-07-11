@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   ChevronRight,
+  Database,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -27,11 +28,15 @@ const navItems = [
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
+
+  const items = isAdmin
+    ? [...navItems, { path: "/admin/knowledge-base", label: "নলেজ বেস (Admin)", icon: Database }]
+    : navItems;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
@@ -86,7 +91,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Link>
 
           <nav className="space-y-1">
-            {navItems.map((item) => {
+            {items.map((item) => {
               const Icon = item.icon;
               return (
                 <Link
@@ -120,7 +125,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 {user?.name || "ব্যবহারকারী"}
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                {user?.email || ""}
+                {(user as any)?.email || ""}
               </p>
             </div>
           </div>

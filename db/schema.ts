@@ -9,6 +9,7 @@ import {
   jsonb,
   decimal,
   pgEnum,
+  date,
 } from "drizzle-orm/pg-core";
 
 // Enums
@@ -256,6 +257,77 @@ export const researchJobs = pgTable("research_jobs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Knowledge Base tables
+export const kbFeeRates = pgTable("kb_fee_rates", {
+  id: serial("id").primaryKey(),
+  marketplace: varchar("marketplace", { length: 10 }).notNull(),
+  feeType: varchar("fee_type", { length: 50 }).notNull(),
+  category: varchar("category", { length: 100 }),
+  sizeTier: varchar("size_tier", { length: 50 }),
+  weightMinOz: decimal("weight_min_oz", { precision: 10, scale: 2 }),
+  weightMaxOz: decimal("weight_max_oz", { precision: 10, scale: 2 }),
+  priceMin: decimal("price_min", { precision: 10, scale: 2 }),
+  priceMax: decimal("price_max", { precision: 10, scale: 2 }),
+  rateType: varchar("rate_type", { length: 10 }).notNull(),
+  rateValue: decimal("rate_value", { precision: 10, scale: 4 }).notNull(),
+  currency: varchar("currency", { length: 5 }).default("USD"),
+  notes: text("notes"),
+  effectiveDate: date("effective_date").notNull(),
+  source: varchar("source", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const kbScoringRubric = pgTable("kb_scoring_rubric", {
+  id: serial("id").primaryKey(),
+  criterionKey: varchar("criterion_key", { length: 50 }).notNull().unique(),
+  criterionLabelBn: text("criterion_label_bn"),
+  criterionLabelEn: text("criterion_label_en"),
+  weight: integer("weight").default(10),
+  scoringLogic: jsonb("scoring_logic").notNull(),
+  displayOrder: integer("display_order"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const kbPlaybook = pgTable("kb_playbook", {
+  id: serial("id").primaryKey(),
+  category: varchar("category", { length: 50 }).notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  marketplace: varchar("marketplace", { length: 10 }).default("ALL"),
+  tags: jsonb("tags").default([]),
+  sourceDoc: varchar("source_doc", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const kbRestrictedCategories = pgTable("kb_restricted_categories", {
+  id: serial("id").primaryKey(),
+  category: varchar("category", { length: 100 }).notNull(),
+  gateType: varchar("gate_type", { length: 50 }),
+  requirements: text("requirements"),
+  approvalTimeline: varchar("approval_timeline", { length: 50 }),
+  marketplace: varchar("marketplace", { length: 10 }).default("US"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const kbRevisions = pgTable("kb_revisions", {
+  id: serial("id").primaryKey(),
+  tableName: varchar("table_name", { length: 50 }).notNull(),
+  summary: text("summary").notNull(),
+  revisedBy: varchar("revised_by", { length: 100 }).default("seed"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Product snapshots for delta alert checks
+export const productSnapshots = pgTable("product_snapshots", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").references(() => products.id).notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }),
+  bsr: integer("bsr"),
+  reviewCount: integer("review_count"),
+  capturedAt: timestamp("captured_at").defaultNow().notNull(),
+});
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -274,3 +346,10 @@ export type CronState = typeof cronState.$inferSelect;
 export type InsertCronState = typeof cronState.$inferInsert;
 export type ResearchJob = typeof researchJobs.$inferSelect;
 export type InsertResearchJob = typeof researchJobs.$inferInsert;
+export type KbFeeRate = typeof kbFeeRates.$inferSelect;
+export type InsertKbFeeRate = typeof kbFeeRates.$inferInsert;
+export type KbScoringRubric = typeof kbScoringRubric.$inferSelect;
+export type KbPlaybook = typeof kbPlaybook.$inferSelect;
+export type KbRestrictedCategory = typeof kbRestrictedCategories.$inferSelect;
+export type KbRevision = typeof kbRevisions.$inferSelect;
+export type ProductSnapshot = typeof productSnapshots.$inferSelect;

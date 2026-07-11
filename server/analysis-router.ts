@@ -1,21 +1,10 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
-import { callAIWithFallback, BANGLA_SYSTEM_PROMPT } from "./lib/ai";
+import { callAIWithFallback, buildGroundedSystemPrompt } from "./lib/ai";
 import { getDb } from "./queries/connection";
 import { productScores, researchJobs } from "@db/schema";
+import { scoreProduct } from "./lib/scoring";
 
-function generateMockProductData(_title: string) {
-  return {
-    price: (Math.random() * 40 + 10).toFixed(2),
-    rating: (Math.random() * 2 + 3).toFixed(1),
-    reviewCount: Math.floor(Math.random() * 500 + 20),
-    bsr: Math.floor(Math.random() * 50000 + 100),
-    sellerCount: Math.floor(Math.random() * 20 + 5),
-    fbaSellers: Math.floor(Math.random() * 15 + 3),
-    salesEstimate: Math.floor(Math.random() * 10000 + 500),
-    reviewVelocity: (Math.random() * 5 + 0.5).toFixed(2),
-  };
-}
 
 export const analysisRouter = createRouter({
   // ── Analyze Product (queue-based to bypass 8s timeout) ──
@@ -26,18 +15,50 @@ export const analysisRouter = createRouter({
         asin: z.string(),
         marketplace: z.string().default("US"),
         productUrl: z.string().optional(),
+        isManual: z.boolean().default(false),
+        price: z.number().optional(),
+        weight: z.number().optional(),
+        bsr: z.number().optional(),
+        reviewCount: z.number().optional(),
+        rating: z.number().optional(),
+        sellerCount: z.number().optional(),
+        category: z.string().optional(),
+        hasBattery: z.boolean().optional(),
+        isElectronic: z.boolean().optional(),
+        isFragile: z.boolean().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
+
+      let jobInput = input.productUrl || input.title;
+      let jobType = input.productUrl ? "url" : "keyword";
+
+      if (input.isManual) {
+        jobType = "manual";
+        jobInput = JSON.stringify({
+          title: input.title,
+          asin: input.asin,
+          price: input.price,
+          weight: input.weight,
+          bsr: input.bsr,
+          reviewCount: input.reviewCount,
+          rating: input.rating,
+          sellerCount: input.sellerCount,
+          category: input.category,
+          hasBattery: input.hasBattery,
+          isElectronic: input.isElectronic,
+          isFragile: input.isFragile,
+        });
+      }
 
       // Queue the job instead of doing it inline
       const [job] = await db
         .insert(researchJobs)
         .values({
           userId: ctx.user.id,
-          input: input.productUrl || input.title,
-          inputType: input.productUrl ? "url" : "keyword",
+          input: jobInput,
+          inputType: jobType,
           marketplace: input.marketplace,
           status: "pending",
         })
@@ -71,30 +92,17 @@ export const analysisRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const { productData } = input;
 
-      const scores = {
-        priceScore: calculatePriceScore(productData.price),
-        sizeWeightScore: 8,
-        marketSizeScore: calculateMarketSizeScore(productData.bsr),
-        reviewBarrierScore: calculateReviewBarrierScore(productData.reviewCount),
-        differentiationScore: Math.floor(Math.random() * 5) + 5,
-        seasonalityScore: 7,
-        complexityScore: calculateComplexityScore(productData),
-        returnRateScore: 7,
-        brandDominanceScore: calculateBrandDominanceScore(productData.sellerCount),
-        trendScore: Math.floor(Math.random() * 4) + 6,
-        defensibilityScore: 6,
-        manufacturabilityScore: productData.price > 15 ? 8 : 6,
-        marginScore: calculateMarginScore(productData.price),
-      };
-
-      const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
-      const grade = totalScore >= 100 ? "A" : totalScore >= 70 ? "B" : "C";
-      const recommendation =
-        grade === "A"
-          ? "যান (GO) — ভাল সুযোগ"
-          : grade === "B"
-          ? "সতর্কতা (CAUTION) — ঝুঁকি আছে"
-          : "বর্জন (FAIL) — এড়িয়ে চলুন";
+      const { scores, totalScore, grade, recommendation } = await scoreProduct({
+        price: productData.price,
+        weight: productData.weight,
+        bsr: productData.bsr,
+        reviewCount: productData.reviewCount,
+        sellerCount: productData.sellerCount,
+        category: productData.category,
+        hasBattery: productData.hasBattery,
+        isElectronic: productData.isElectronic,
+        isFragile: productData.isFragile,
+      });
 
       const db = getDb();
       await db.insert(productScores).values({
@@ -122,6 +130,7 @@ export const analysisRouter = createRouter({
       z.object({
         title: z.string(),
         asin: z.string(),
+        marketplace: z.string().default("US"),
         analysis: z.string(),
         scores: z.object({
           totalScore: z.number(),
@@ -150,8 +159,9 @@ ${input.analysis}
 
 ব্যবসায়িক টার্মগুলোর বাংলা অনুবাদ বন্ধনীতে দিন। টেবিল ও বুলেট পয়েন্ট ব্যবহার করুন।`;
 
+      const systemPrompt = await buildGroundedSystemPrompt(input.marketplace);
       const report = await callAIWithFallback([
-        { role: "system", content: BANGLA_SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         { role: "user", content: reportPrompt },
       ]);
 
@@ -183,43 +193,3 @@ ${input.analysis}
     }),
 });
 
-function calculatePriceScore(price: number): number {
-  if (price >= 20 && price <= 35) return 10;
-  if (price >= 15 && price <= 50) return 8;
-  if (price > 50 && price <= 80) return 5;
-  return 3;
-}
-function calculateMarketSizeScore(bsr: number): number {
-  if (bsr < 5000) return 9;
-  if (bsr < 20000) return 8;
-  if (bsr < 50000) return 6;
-  return 4;
-}
-function calculateReviewBarrierScore(reviewCount: number): number {
-  if (reviewCount < 50) return 10;
-  if (reviewCount < 150) return 8;
-  if (reviewCount < 500) return 5;
-  return 3;
-}
-function calculateComplexityScore(data: {
-  hasBattery?: boolean;
-  isElectronic?: boolean;
-  isFragile?: boolean;
-}): number {
-  let score = 10;
-  if (data.hasBattery) score -= 3;
-  if (data.isElectronic) score -= 3;
-  if (data.isFragile) score -= 2;
-  return Math.max(score, 2);
-}
-function calculateBrandDominanceScore(sellerCount: number): number {
-  if (sellerCount > 15) return 7;
-  if (sellerCount > 10) return 6;
-  if (sellerCount > 5) return 4;
-  return 3;
-}
-function calculateMarginScore(price: number): number {
-  if (price >= 25 && price <= 50) return 9;
-  if (price >= 15 && price <= 80) return 7;
-  return 5;
-}

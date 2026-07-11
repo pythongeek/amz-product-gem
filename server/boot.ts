@@ -18,6 +18,7 @@ app.get("/api/health", (c) => c.json({ status: "ok", time: new Date().toISOStrin
 
 // DB diagnostic
 app.get("/api/debug/db", async (c) => {
+  if (env.isProduction) return c.json({ ok: false, error: "Forbidden in production" }, 403);
   try {
     const pool = getRawPool();
     const result = await pool.query("SELECT current_database(), current_user, version()");
@@ -31,6 +32,7 @@ app.get("/api/debug/db", async (c) => {
 
 // Test admin table
 app.get("/api/debug/admin-table", async (c) => {
+  if (env.isProduction) return c.json({ ok: false, error: "Forbidden in production" }, 403);
   try {
     const pool = getRawPool();
     const result = await pool.query("SELECT count(*) FROM admin_credentials");
@@ -42,6 +44,7 @@ app.get("/api/debug/admin-table", async (c) => {
 
 // AI API config debug (redacted)
 app.get("/api/debug/ai-config", async (c) => {
+  if (env.isProduction) return c.json({ ok: false, error: "Forbidden in production" }, 403);
   return c.json({
     ok: true,
     minimax: {
@@ -62,6 +65,7 @@ app.get("/api/debug/ai-config", async (c) => {
 
 // Test AI API directly
 app.get("/api/debug/ai-test", async (c) => {
+  if (env.isProduction) return c.json({ ok: false, error: "Forbidden in production" }, 403);
   try {
     const { callAIWithFallback } = await import("./lib/ai");
     const result = await callAIWithFallback([

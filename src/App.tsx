@@ -11,6 +11,7 @@ import Launch from "./pages/Launch";
 import Reports from "./pages/Reports";
 import Alerts from "./pages/Alerts";
 import Settings from "./pages/Settings";
+import KnowledgeBase from "./pages/admin/KnowledgeBase";
 import NotFound from "./pages/NotFound";
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
       <Route path="/reports" element={<Reports />} />
       <Route path="/alerts" element={<Alerts />} />
       <Route path="/settings" element={<Settings />} />
+      <Route path="/admin/knowledge-base" element={<KnowledgeBase />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

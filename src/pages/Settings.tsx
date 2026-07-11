@@ -68,11 +68,11 @@ export default function Settings() {
   useEffect(() => {
     if (user) {
       setName(user.name || "");
-      setExperience(user.experienceLevel || "");
-      setBudget(user.budgetRange || "");
-      setSourcing(user.preferredSourcing || "");
-      setMargin(user.targetMargin?.toString() || "");
-      setLocalArea(user.localArea || "");
+      setExperience((user as any).experienceLevel || "");
+      setBudget((user as any).budgetRange || "");
+      setSourcing((user as any).preferredSourcing || "");
+      setMargin((user as any).targetMargin?.toString() || "");
+      setLocalArea((user as any).localArea || "");
     }
   }, [user]);
 
@@ -139,7 +139,7 @@ export default function Settings() {
                 ইমেইল
               </Label>
               <Input
-                value={user?.email || ""}
+                value={(user as any)?.email || ""}
                 disabled
                 className="h-12 rounded-xl bg-slate-50 dark:bg-slate-800"
               />

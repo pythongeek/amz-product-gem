@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, publicQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { adminCredentials } from "@db/schema";
-import { eq } from "drizzle-orm";
+import { adminCredentials, kbFeeRates } from "@db/schema";
+import { eq, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { signAdminToken, verifyAdminToken } from "./lib/admin-auth";
 import { TRPCError } from "@trpc/server";
+import { clearKbCache } from "./queries/knowledge-base";
 
 export const adminAuthRouter = createRouter({
   login: publicQuery
@@ -121,4 +122,98 @@ export const adminAuthRouter = createRouter({
 
     return { created: true, message: "Default admin created: username=admin, password=admin123" };
   }),
+
+  listRates: adminQuery.query(async () => {
+    const db = getDb();
+    return db.select().from(kbFeeRates).orderBy(desc(kbFeeRates.effectiveDate));
+  }),
+
+  updateRate: adminQuery
+    .input(
+      z.object({
+        id: z.number(),
+        marketplace: z.string().min(1),
+        feeType: z.string().min(1),
+        category: z.string().nullable().optional(),
+        sizeTier: z.string().nullable().optional(),
+        weightMinOz: z.number().nullable().optional(),
+        weightMaxOz: z.number().nullable().optional(),
+        priceMin: z.number().nullable().optional(),
+        priceMax: z.number().nullable().optional(),
+        rateType: z.enum(["percent", "flat"]),
+        rateValue: z.number(),
+        currency: z.string().default("USD"),
+        notes: z.string().nullable().optional(),
+        effectiveDate: z.string().min(1),
+        source: z.string().nullable().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const { id, ...data } = input;
+      
+      const updated = await db
+        .update(kbFeeRates)
+        .set({
+          ...data,
+          weightMinOz: data.weightMinOz !== undefined && data.weightMinOz !== null ? String(data.weightMinOz) : null,
+          weightMaxOz: data.weightMaxOz !== undefined && data.weightMaxOz !== null ? String(data.weightMaxOz) : null,
+          priceMin: data.priceMin !== undefined && data.priceMin !== null ? String(data.priceMin) : null,
+          priceMax: data.priceMax !== undefined && data.priceMax !== null ? String(data.priceMax) : null,
+          rateValue: String(data.rateValue),
+          effectiveDate: data.effectiveDate,
+        })
+        .where(eq(kbFeeRates.id, id))
+        .returning();
+
+      clearKbCache();
+      return updated[0];
+    }),
+
+  insertRate: adminQuery
+    .input(
+      z.object({
+        marketplace: z.string().min(1),
+        feeType: z.string().min(1),
+        category: z.string().nullable().optional(),
+        sizeTier: z.string().nullable().optional(),
+        weightMinOz: z.number().nullable().optional(),
+        weightMaxOz: z.number().nullable().optional(),
+        priceMin: z.number().nullable().optional(),
+        priceMax: z.number().nullable().optional(),
+        rateType: z.enum(["percent", "flat"]),
+        rateValue: z.number(),
+        currency: z.string().default("USD"),
+        notes: z.string().nullable().optional(),
+        effectiveDate: z.string().min(1),
+        source: z.string().nullable().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const inserted = await db
+        .insert(kbFeeRates)
+        .values({
+          ...input,
+          weightMinOz: input.weightMinOz !== undefined && input.weightMinOz !== null ? String(input.weightMinOz) : null,
+          weightMaxOz: input.weightMaxOz !== undefined && input.weightMaxOz !== null ? String(input.weightMaxOz) : null,
+          priceMin: input.priceMin !== undefined && input.priceMin !== null ? String(input.priceMin) : null,
+          priceMax: input.priceMax !== undefined && input.priceMax !== null ? String(input.priceMax) : null,
+          rateValue: String(input.rateValue),
+          effectiveDate: input.effectiveDate,
+        })
+        .returning();
+
+      clearKbCache();
+      return inserted[0];
+    }),
+
+  deleteRate: adminQuery
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      await db.delete(kbFeeRates).where(eq(kbFeeRates.id, input.id));
+      clearKbCache();
+      return { success: true };
+    }),
 });

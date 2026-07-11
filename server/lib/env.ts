@@ -18,6 +18,20 @@ function getDatabaseUrl(): string {
   return "";
 }
 
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("CRITICAL SECURITY ERROR: JWT_SECRET environment variable must be set in production!");
+    }
+    return "fba-research-secret-key-change-in-production";
+  }
+  if (secret === "fba-research-secret-key-change-in-production" && process.env.NODE_ENV === "production") {
+    throw new Error("CRITICAL SECURITY ERROR: Do not use the default fallback JWT_SECRET in production!");
+  }
+  return secret;
+}
+
 export const env = {
   appId: process.env.APP_ID ?? "",
   appSecret: process.env.APP_SECRET ?? "",
@@ -44,7 +58,7 @@ export const env = {
   // Cron-jobs.org
   cronJobsOrgApiKey: process.env.CRON_JOBS_ORG_API_KEY || "",
   cronSecret: process.env.CRON_SECRET || "",
-  jwtSecret: process.env.JWT_SECRET ?? "fba-research-secret-key-change-in-production",
+  jwtSecret: getJwtSecret(),
   kimiAuthUrl: process.env.KIMI_AUTH_URL ?? "https://auth.kimi.com",
   kimiOpenUrl: process.env.KIMI_OPEN_URL ?? "https://open.kimi.com",
   ownerUnionId: process.env.OWNER_UNION_ID ?? "",

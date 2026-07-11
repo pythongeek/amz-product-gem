@@ -15,6 +15,13 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Calculator as CalcIcon,
   DollarSign,
   Package,
@@ -25,6 +32,7 @@ import {
   RotateCcw,
   Loader2,
   Info,
+  ShieldAlert,
 } from "lucide-react";
 
 const categories = [
@@ -54,6 +62,10 @@ export default function Calculator() {
   const [returnRate, setReturnRate] = useState("5");
   const [isCalculating, setIsCalculating] = useState(false);
   const [result, setResult] = useState<any>(null);
+  
+  // Stress test states
+  const [stressResult, setStressResult] = useState<any>(null);
+  const [stressDialogOpen, setStressDialogOpen] = useState(false);
 
   const calculateMutation = trpc.fba.calculate.useMutation();
 
@@ -71,6 +83,48 @@ export default function Calculator() {
         returnRate: parseFloat(returnRate),
       });
       setResult(calcResult);
+
+      // Run stress test calculations
+      const referralFeeRate = calcResult.breakdown.costs.referral / calcResult.breakdown.sellingPrice;
+      const stressSellingPrice = calcResult.breakdown.sellingPrice * 0.80; // 20% off promo
+      const stressProductCost = calcResult.breakdown.costs.product * 1.15; // +15% supplier cost
+      const stressFbaFee = calcResult.breakdown.costs.fba * 1.10; // +10% FBA fees
+      const stressReferralFee = stressSellingPrice * referralFeeRate;
+      
+      const stressFuel = (calcResult.breakdown.costs.fuelSurcharge || 0) * 1.10;
+      const stressStorage = calcResult.breakdown.costs.storage;
+      const stressShipping = calcResult.breakdown.costs.shipping;
+      const stressInbound = calcResult.breakdown.costs.inboundPlacement || 0;
+      const stressAged = calcResult.breakdown.costs.agedInventory || 0;
+      const stressSipp = calcResult.breakdown.costs.sippPenalty || 0;
+      const stressLowPrice = calcResult.breakdown.costs.lowPriceDiscount || 0;
+      const stressReturns = stressSellingPrice * (parseFloat(returnRate) / 100);
+      const stressPpc = stressSellingPrice * 0.25; // 25% ACoS
+
+      const stressTotalCosts = 
+        stressProductCost + 
+        stressShipping + 
+        stressReferralFee + 
+        stressFbaFee + 
+        stressFuel + 
+        stressInbound + 
+        stressAged + 
+        stressSipp - 
+        stressLowPrice + 
+        stressStorage + 
+        stressReturns + 
+        stressPpc;
+
+      const stressNetProfit = stressSellingPrice - stressTotalCosts;
+      const stressMargin = (stressNetProfit / stressSellingPrice) * 100;
+
+      setStressResult({
+        sellingPrice: stressSellingPrice,
+        netProfit: stressNetProfit,
+        marginPercent: stressMargin,
+        totalCosts: stressTotalCosts,
+      });
+
     } catch (error) {
       console.error(error);
     } finally {
@@ -306,6 +360,41 @@ export default function Calculator() {
                         isDeduction: true,
                       },
                       {
+                        label: "জ্বালানি সারচার্জ (Fuel Surcharge)",
+                        value: -result.breakdown.costs.fuelSurcharge,
+                        icon: Percent,
+                        color: "text-red-500",
+                        isDeduction: true,
+                      },
+                      {
+                        label: "ইনবাউন্ড প্লেসমেন্ট ফি (Inbound Placement)",
+                        value: -result.breakdown.costs.inboundPlacement,
+                        icon: Warehouse,
+                        color: "text-red-500",
+                        isDeduction: true,
+                      },
+                      ...(result.breakdown.costs.lowPriceDiscount > 0 ? [{
+                        label: "লো-প্রাইস FBA ডিসকাউন্ট",
+                        value: result.breakdown.costs.lowPriceDiscount,
+                        icon: DollarSign,
+                        color: "text-green-600",
+                        isDeduction: false,
+                      }] : []),
+                      {
+                        label: "এজড ইনভেন্টরি ফি (Aged Inventory)",
+                        value: -result.breakdown.costs.agedInventory,
+                        icon: Info,
+                        color: "text-red-500",
+                        isDeduction: true,
+                      },
+                      {
+                        label: "SIPP প্যাকেজিং পেনাল্টি (Bulky items)",
+                        value: -result.breakdown.costs.sippPenalty,
+                        icon: Info,
+                        color: "text-red-500",
+                        isDeduction: true,
+                      },
+                      {
                         label: "স্টোরেজ ফি",
                         value: -result.breakdown.costs.storage,
                         icon: Warehouse,
@@ -408,6 +497,15 @@ export default function Calculator() {
                     </p>
                   </CardContent>
                 </Card>
+
+                {/* Margin Stress Test Button */}
+                <Button
+                  onClick={() => setStressDialogOpen(true)}
+                  className="w-full h-12 text-md font-semibold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-lg"
+                >
+                  <ShieldAlert className="h-5 w-5 mr-2" />
+                  মার্জিন স্ট্রেস টেস্ট (Margin Stress Test)
+                </Button>
               </>
             ) : (
               <Card className="border-0 shadow-lg">
@@ -425,6 +523,94 @@ export default function Calculator() {
           </div>
         </div>
       </div>
+
+      {/* Stress Test Dialog */}
+      <Dialog open={stressDialogOpen} onOpenChange={setStressDialogOpen}>
+        <DialogContent className="max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6">
+          <DialogHeader className="space-y-2">
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-red-600">
+              <ShieldAlert className="h-6 w-6" />
+              মার্জিন স্ট্রেস টেস্ট রিপোর্ট
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm">
+              এই টেস্টটি প্রোডাক্টের স্থায়িত্ব যাচাই করতে নিম্নোক্ত প্রতিকূল পরিস্থিতিতে মার্জিন হিসেব করে:
+              <ul className="list-disc pl-5 mt-2 space-y-1 text-xs">
+                <li>Supplier কস্ট <b>+১৫%</b> বৃদ্ধি</li>
+                <li>FBA ফি ও সারচার্জ <b>+১০%</b> বৃদ্ধি</li>
+                <li>গ্রাহকদের আকৃষ্ট করতে <b>২০% প্রোমো ডিসকাউন্ট</b></li>
+                <li>PPC এডভার্টাইজিং <b>২৫% ACoS</b> ধরে</li>
+              </ul>
+            </DialogDescription>
+          </DialogHeader>
+
+          {stressResult && (
+            <div className="space-y-6 mt-4">
+              <div
+                className={`p-6 rounded-2xl text-center border ${
+                  stressResult.marginPercent >= 10
+                    ? "bg-green-50/50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
+                    : stressResult.marginPercent >= 0
+                    ? "bg-yellow-50/50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
+                    : "bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-800"
+                }`}
+              >
+                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">স্ট্রেস টেস্ট নিট লাভ</p>
+                <h3
+                  className={`text-4xl font-extrabold ${
+                    stressResult.marginPercent >= 10
+                      ? "text-green-600"
+                      : stressResult.marginPercent >= 0
+                      ? "text-yellow-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  ${stressResult.netProfit.toFixed(2)}
+                </h3>
+                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300 mt-2">
+                  মার্জিন: {stressResult.marginPercent.toFixed(1)}%
+                </p>
+                <div className="mt-3 flex justify-center">
+                  <Badge
+                    className={`${
+                      stressResult.marginPercent >= 10
+                        ? "bg-green-500 hover:bg-green-600"
+                        : stressResult.marginPercent >= 0
+                        ? "bg-yellow-500 hover:bg-yellow-600"
+                        : "bg-red-500 hover:bg-red-600"
+                    } text-white px-4 py-1 text-xs`}
+                  >
+                    {stressResult.marginPercent >= 10
+                      ? "সবুজ (Green) — চরম প্রতিকূলতাতেও লাভজনক"
+                      : stressResult.marginPercent >= 0
+                      ? "হলুদ (Yellow) — ঝুঁকিপূর্ণ, লাভ খুব কম"
+                      : "লাল (Red) — লোকসান নিশ্চিত, অগ্রহণযোগ্য"}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                  <span className="text-slate-500">স্ট্রেস সেলিং প্রাইজ:</span>
+                  <span className="font-semibold">${stressResult.sellingPrice.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                  <span className="text-slate-500">স্ট্রেস মোট খরচ:</span>
+                  <span className="font-semibold text-red-500">${stressResult.totalCosts.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex justify-end">
+            <Button
+              onClick={() => setStressDialogOpen(false)}
+              className="bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-full"
+            >
+              বন্ধ করুন
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </ProtectedLayout>
   );
 }
