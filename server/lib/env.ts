@@ -41,7 +41,11 @@ export const env = {
   supabaseServiceKey:
     process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   supabaseAnonKey:
-    process.env.SUPABASE_ANON_KEY || process.env.VITE_PUBLIC_SUPABASE_ANON_KEY || "",
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.VITE_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    "",
   // AI API (Primary - MiniMax)
   // Uses Anthropic-compatible /v1/messages format with x-api-key header
   // Base URL: https://api.minimax.io/anthropic  |  Model: MiniMax-M3

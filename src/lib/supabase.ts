@@ -22,10 +22,13 @@ function getSupabaseUrl(): string {
 }
 
 function getSupabaseKey(): string {
-  const key = getEnv("VITE_PUBLIC_SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON_KEY");
+  const key = getEnv("VITE_PUBLIC_SUPABASE_ANON_KEY") || 
+              getEnv("VITE_SUPABASE_ANON_KEY") || 
+              getEnv("VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY") || 
+              getEnv("SUPABASE_PUBLISHABLE_KEY");
   if (!key) {
     throw new Error(
-      "VITE_PUBLIC_SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY) is required. " +
+      "VITE_PUBLIC_SUPABASE_ANON_KEY (or VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY) is required. " +
         "Please set it in your Vercel environment variables."
     );
   }
