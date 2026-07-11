@@ -19,10 +19,10 @@ function getDatabaseUrl(): string {
 }
 
 function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
+  const secret = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET;
   if (!secret) {
     if (process.env.NODE_ENV === "production") {
-      throw new Error("CRITICAL SECURITY ERROR: JWT_SECRET environment variable must be set in production!");
+      throw new Error("CRITICAL SECURITY ERROR: JWT_SECRET or SUPABASE_JWT_SECRET environment variable must be set in production!");
     }
     return "fba-research-secret-key-change-in-production";
   }
