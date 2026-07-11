@@ -342,6 +342,40 @@ BSR: ${manualData.bsr}
       language: "bn",
     });
 
+    // Save scores to productScores table
+    await db.insert(productScores).values({
+      productId: product.id,
+      userId: job.userId || 0,
+      priceScore: scores.priceScore,
+      sizeWeightScore: scores.sizeWeightScore,
+      marketSizeScore: scores.marketSizeScore,
+      reviewBarrierScore: scores.reviewBarrierScore,
+      differentiationScore: scores.differentiationScore,
+      seasonalityScore: scores.seasonalityScore,
+      complexityScore: scores.complexityScore,
+      returnRateScore: scores.returnRateScore,
+      brandDominanceScore: scores.brandDominanceScore,
+      trendScore: scores.trendScore,
+      defensibilityScore: scores.defensibilityScore,
+      manufacturabilityScore: scores.manufacturabilityScore,
+      marginScore: scores.marginScore,
+      totalScore,
+      grade,
+      recommendation,
+      analysisData: {
+        price: specs.price,
+        weight: specs.weight,
+        bsr: specs.bsr,
+        reviewCount: specs.reviewCount,
+        sellerCount: specs.sellerCount,
+        category: specs.category,
+        hasBattery: specs.hasBattery,
+        isElectronic: specs.isElectronic,
+        isFragile: specs.isFragile,
+        calculatedAt: new Date().toISOString(),
+      },
+    });
+
     // Mark job as completed
     await db
       .update(researchJobs)

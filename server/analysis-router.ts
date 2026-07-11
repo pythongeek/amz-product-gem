@@ -2,8 +2,9 @@ import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { callAIWithFallback, buildGroundedSystemPrompt } from "./lib/ai";
 import { getDb } from "./queries/connection";
-import { productScores, researchJobs } from "@db/schema";
+import { productScores, researchJobs, products } from "@db/schema";
 import { scoreProduct } from "./lib/scoring";
+import { eq } from "drizzle-orm";
 
 
 export const analysisRouter = createRouter({
@@ -91,6 +92,16 @@ export const analysisRouter = createRouter({
     )
     .mutation(async ({ input, ctx }) => {
       const { productData } = input;
+      const db = getDb();
+
+      // Retrieve product to get its marketplace
+      const productRows = await db
+        .select()
+        .from(products)
+        .where(eq(products.id, input.productId))
+        .limit(1);
+      const product = productRows[0];
+      const marketplace = product?.marketplace || "US";
 
       const { scores, totalScore, grade, recommendation } = await scoreProduct({
         price: productData.price,
@@ -102,9 +113,8 @@ export const analysisRouter = createRouter({
         hasBattery: productData.hasBattery,
         isElectronic: productData.isElectronic,
         isFragile: productData.isFragile,
+        marketplace,
       });
-
-      const db = getDb();
       await db.insert(productScores).values({
         productId: input.productId,
         userId: ctx.user.id,

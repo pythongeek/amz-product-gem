@@ -1,4 +1,4 @@
-import { getScoringRubric } from "../queries/knowledge-base";
+import { getScoringRubric, matchFeeRate } from "../queries/knowledge-base";
 
 export interface ProductInput {
   price: number;
@@ -10,15 +10,17 @@ export interface ProductInput {
   hasBattery?: boolean;
   isElectronic?: boolean;
   isFragile?: boolean;
+  marketplace?: string;
 }
 
-export function extractSpecsFromReport(content: string) {
-  const specs = {
+export function extractSpecsFromReport(content: string): ProductInput {
+  const specs: ProductInput = {
     price: 25,
     weight: 1,
     bsr: 15000,
     reviewCount: 120,
     sellerCount: 8,
+    category: "most_categories",
     hasBattery: false,
     isElectronic: false,
     isFragile: false,
@@ -44,6 +46,17 @@ export function extractSpecsFromReport(content: string) {
     const bsrMatch = content.match(/BSR\s*\|\s*([0-9,]+)/i) || 
                      content.match(/BSR\s*:\s*([0-9,]+)/i);
     if (bsrMatch) specs.bsr = parseInt(bsrMatch[1].replace(/,/g, ""));
+
+    // Extract category
+    const categoryMatch = content.match(/ক্যাটাগরি\s*\|\s*([^\n|]+)/i) || 
+                          content.match(/category\s*:\s*([^\n]+)/i);
+    if (categoryMatch) {
+      const cat = categoryMatch[1].trim().toLowerCase();
+      if (cat.includes("electronic") || cat.includes("ইলেকট্রনিক্স")) specs.category = "electronics";
+      else if (cat.includes("home") || cat.includes("kitchen") || cat.includes("হোম")) specs.category = "home_kitchen";
+      else if (cat.includes("clothing") || cat.includes("ক্লোথিং")) specs.category = "clothing";
+      else if (cat.includes("jewelry") || cat.includes("জুয়েলারি")) specs.category = "jewelry";
+    }
 
     // Deduce electronic/battery/fragile from content
     if (/battery|ব্যাটারি|চার্জার/i.test(content)) specs.hasBattery = true;
@@ -76,6 +89,37 @@ export async function scoreProduct(input: ProductInput) {
     manufacturabilityScore: 7,
     marginScore: 7,
   };
+
+  // 1. Calculate Grounded Margin if price is provided
+  let netMargin = 0;
+  const marketplace = input.marketplace || "US";
+  if (input.price && input.price > 0) {
+    try {
+      const refRate = await matchFeeRate(marketplace, "referral", input.category, null, input.price);
+      const referralRate = refRate ? Number(refRate.rateValue) : 0.15; // default 15%
+      const referralFee = input.price * referralRate;
+
+      const weightOz = (input.weight ?? 1) * 16;
+      const fulRate = await matchFeeRate(marketplace, "fulfillment", null, weightOz);
+      let fulfillmentFee = fulRate ? Number(fulRate.rateValue) : 4.50; // default $4.50
+
+      const fuelRate = await matchFeeRate(marketplace, "fuel_surcharge");
+      if (fuelRate) {
+        fulfillmentFee += fulfillmentFee * Number(fuelRate.rateValue);
+      }
+
+      const landedCogs = input.price * 0.25; // 25% cogs default
+      const storageFee = 0.15; // default $0.15 storage
+      const netProfit = input.price - referralFee - fulfillmentFee - landedCogs - storageFee;
+      netMargin = netProfit / input.price;
+    } catch (err) {
+      console.warn("Failed to calculate grounded margin in scoring:", err);
+      // Fallback
+      if (input.price >= 25 && input.price <= 50) netMargin = 0.32;
+      else if (input.price >= 15 && input.price <= 80) netMargin = 0.22;
+      else netMargin = 0.12;
+    }
+  }
 
   // Process rubric logic dynamically if available
   for (const item of rubric) {
@@ -122,9 +166,12 @@ export async function scoreProduct(input: ProductInput) {
       else scores.brandDominanceScore = 3;
     }
     else if (key === "marginScore") {
-      if (input.price >= 25 && input.price <= 50) scores.marginScore = 9;
-      else if (input.price >= 15 && input.price <= 80) scores.marginScore = 7;
-      else scores.marginScore = 5;
+      const match = logic.find((band: any) => {
+        if (band.margin_min !== undefined && netMargin >= band.margin_min) return true;
+        if (band.margin_max !== undefined && netMargin <= band.margin_max) return true;
+        return false;
+      });
+      if (match) scores.marginScore = match.score;
     }
     else if (key === "manufacturabilityScore") {
       scores.manufacturabilityScore = input.price > 15 ? 8 : 6;
