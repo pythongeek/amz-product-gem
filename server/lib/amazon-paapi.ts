@@ -41,15 +41,118 @@ function getSignatureKey(key: string, dateStamp: string, regionName: string, ser
   return kSigning;
 }
 
+async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PAAPIProduct | null> {
+  try {
+    const domainMap: Record<string, string> = {
+      US: "amazon.com",
+      UK: "amazon.co.uk",
+      DE: "amazon.de",
+      CA: "amazon.ca",
+      FR: "amazon.fr",
+      IT: "amazon.it",
+      ES: "amazon.es",
+      JP: "amazon.co.jp"
+    };
+    const domain = domainMap[marketplace.toUpperCase()] || "amazon.com";
+    const targetUrl = `https://www.${domain}/dp/${asin}`;
+    const baseUrl = "https://api.microlink.io";
+    const params = new URLSearchParams({
+      url: targetUrl,
+      "data.title.selector": "#productTitle",
+      "data.price.selector": ".a-price .a-offscreen",
+      "data.image.selector": "#landingImage",
+      "data.image.attr": "src",
+      "data.rating.selector": "span.a-icon-alt",
+      "data.reviews.selector": "#acrCustomerReviewText",
+      prerender: "true"
+    });
+    const url = `${baseUrl}?${params.toString()}`;
+    console.log(`[Scraper] Fetching Amazon product via Microlink: ${url}`);
+    
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Accept": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      console.warn(`[Scraper] Microlink request failed with status: ${response.status}`);
+      return null;
+    }
+
+    const json = (await response.json()) as any;
+    if (json.status !== "success" || !json.data) {
+      console.warn("[Scraper] Microlink returned non-success response:", json);
+      return null;
+    }
+
+    const { title, price: priceStr, image, rating: ratingStr, reviews: reviewsStr } = json.data;
+    
+    const cleanTitle = title ? title.trim() : "Unknown Amazon Product";
+
+    let imageUrl = "";
+    if (typeof image === "string") {
+      imageUrl = image;
+    } else if (image && typeof image === "object") {
+      imageUrl = image.url || "";
+    }
+
+    let parsedPrice = 0;
+    if (priceStr) {
+      const match = priceStr.replace(/[^0-9.]/g, "");
+      if (match) parsedPrice = parseFloat(match);
+    }
+
+    let parsedRating = 4.0;
+    if (ratingStr) {
+      const match = ratingStr.match(/([0-9.]+)/);
+      if (match) parsedRating = parseFloat(match[1]);
+    }
+
+    let parsedReviewCount = 100;
+    if (reviewsStr) {
+      const match = reviewsStr.replace(/[^0-9]/g, "");
+      if (match) parsedReviewCount = parseInt(match, 10);
+    }
+
+    console.log("[Scraper] Successfully scraped Amazon data:", {
+      asin,
+      title: cleanTitle,
+      price: parsedPrice,
+      rating: parsedRating,
+      reviewCount: parsedReviewCount,
+      imageUrl
+    });
+
+    return {
+      asin,
+      title: cleanTitle,
+      price: parsedPrice,
+      imageUrl,
+      rating: parsedRating,
+      reviewCount: parsedReviewCount
+    };
+  } catch (err: any) {
+    console.error("[Scraper] Error in Microlink scraper:", err.message);
+    return null;
+  }
+}
+
 export async function fetchAmazonProduct(asin: string, marketplace = "US"): Promise<PAAPIProduct> {
   const accessKey = env.awsAccessKey;
   const secretKey = env.awsSecretKey;
   const associateTag = env.associateTag;
 
-  // Fallback to high-quality Mock Data if credentials are missing
+  // Fallback to Microlink scraper / Mock Data if credentials are missing
   if (!accessKey || !secretKey || !associateTag) {
-    console.warn("PA-API Credentials missing. Returning high-quality mock data.");
-    
+    console.warn("PA-API Credentials missing. Falling back to Microlink live scraper.");
+    const scraped = await fetchWithMicrolink(asin, marketplace);
+    if (scraped) {
+      return scraped;
+    }
+
+    console.warn("Scraper fallback failed. Returning high-quality mock data.");
     // Seed BSR/Price based on hash of ASIN to be deterministic but realistic
     const hash = asin.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const mockTitles = [
