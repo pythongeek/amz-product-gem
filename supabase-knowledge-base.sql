@@ -110,6 +110,9 @@ ALTER TABLE kb_revisions ALTER COLUMN table_name TYPE VARCHAR(255);
 -- describes how to keep them current.
 -- ============================================================
 
+-- Truncate existing seed tables to avoid duplicate keys on re-seeding
+TRUNCATE TABLE kb_fee_rates, kb_scoring_rubric, kb_playbook, kb_restricted_categories CASCADE;
+
 -- ---- US Referral fees by category ----
 INSERT INTO kb_fee_rates (marketplace, fee_type, category, size_tier, rate_type, rate_value, notes, effective_date, source) VALUES
 ('US','referral','most_categories', NULL, 'percent', 0.15, 'Default referral fee for Home & Kitchen, Sports, Toys, etc.', '2026-01-15', 'amazon_fba_complete_guide.md'),

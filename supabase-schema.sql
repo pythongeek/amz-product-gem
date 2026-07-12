@@ -254,6 +254,18 @@ CREATE TABLE IF NOT EXISTS research_jobs (
   created_at TIMESTAMP DEFAULT NOW() NOT NULL
 );
 
+-- ============================================================
+-- 13. PRODUCT SNAPSHOTS (for delta alert checks)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS product_snapshots (
+  id SERIAL PRIMARY KEY,
+  product_id INTEGER REFERENCES products(id) NOT NULL,
+  price DECIMAL(10, 2),
+  bsr INTEGER,
+  review_count INTEGER,
+  captured_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
 -- Safe schema updates to handle existing tables
 ALTER TABLE products ADD COLUMN IF NOT EXISTS status product_status DEFAULT 'researching';
 ALTER TABLE products ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]';
@@ -263,6 +275,7 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS folder_id INTEGER;
 -- ============================================================
 -- INDEXES FOR PERFORMANCE
 -- ============================================================
+CREATE INDEX IF NOT EXISTS idx_snapshots_product_id ON product_snapshots(product_id);
 CREATE INDEX IF NOT EXISTS idx_products_user_id ON products(user_id);
 CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
 CREATE INDEX IF NOT EXISTS idx_products_asin ON products(asin);
