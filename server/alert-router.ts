@@ -3,6 +3,7 @@ import { createRouter, authedQuery, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { alerts, products, activities, cronState, productSnapshots } from "@db/schema";
 import { eq, desc, sql } from "drizzle-orm";
+import { env } from "./lib/env";
 
 export const alertRouter = createRouter({
   list: authedQuery.query(async ({ ctx }) => {
@@ -41,7 +42,7 @@ export const alertRouter = createRouter({
       })
     )
     .mutation(async ({ input }) => {
-      if (input.cronSecret !== process.env.CRON_SECRET) {
+      if (env.cronSecret && input.cronSecret !== env.cronSecret) {
         throw new Error("Invalid cron secret");
       }
 
