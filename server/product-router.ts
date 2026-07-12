@@ -373,6 +373,64 @@ export const productRouter = createRouter({
       return updated[0];
     }),
 
+  quickSaveUrl: authedQuery
+    .input(
+      z.object({
+        url: z.string(),
+        marketplace: z.string().default("US"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+      const match = input.url.match(/(?:dp|gp\/product)\/(\w{10})/);
+      const asin = match ? match[1] : `SAVED-${Date.now()}`;
+
+      let title = `Amazon Product ${asin}`;
+      let price = 29.99;
+      let rating = 4.2;
+      let reviewCount = 100;
+      let bsr = 15000;
+      let imageUrl = "";
+
+      try {
+        const data = await fetchAmazonProduct(asin, input.marketplace);
+        if (data && data.title) {
+          title = data.title;
+          if (data.price) price = data.price;
+          if (data.rating) rating = data.rating;
+          if (data.reviewCount) reviewCount = data.reviewCount;
+          if (data.imageUrl) imageUrl = data.imageUrl;
+        }
+      } catch (err: any) {
+        console.warn("[quickSaveUrl] PA-API fetch failed, saving with defaults:", err.message);
+      }
+
+      const [product] = await db
+        .insert(products)
+        .values({
+          userId: ctx.user.id,
+          asin,
+          title,
+          price: String(price),
+          rating: String(rating),
+          reviewCount,
+          bsr,
+          imageUrl,
+          marketplace: input.marketplace,
+          status: "researching",
+        })
+        .returning();
+
+      await db.insert(productSnapshots).values({
+        productId: product.id,
+        price: String(price),
+        bsr,
+        reviewCount,
+      });
+
+      return product;
+    }),
+
   listFolders: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     return db

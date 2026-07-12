@@ -60,6 +60,35 @@ export default function Products() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  // Quick Save URL State
+  const [quickUrl, setQuickUrl] = useState("");
+  const [quickMarketplace, setQuickMarketplace] = useState("US");
+  const [isSavingUrl, setIsSavingUrl] = useState(false);
+
+  const quickSaveMutation = trpc.product.quickSaveUrl.useMutation();
+
+  const handleQuickSave = async () => {
+    if (!quickUrl.trim()) {
+      toast.error("অনুগ্রহ করে একটি আমাজন প্রোডাক্ট ইউআরএল দিন।");
+      return;
+    }
+
+    setIsSavingUrl(true);
+    try {
+      const product = await quickSaveMutation.mutateAsync({
+        url: quickUrl,
+        marketplace: quickMarketplace,
+      });
+      toast.success(`"${product.title || product.asin}" সফলভাবে সেভ করা হয়েছে!`);
+      setQuickUrl("");
+      utils.product.list.invalidate();
+    } catch (err: any) {
+      toast.error(`সেভ করতে ব্যর্থ হয়েছে: ${err.message || "Unknown error"}`);
+    } finally {
+      setIsSavingUrl(false);
+    }
+  };
+
   // CSV Import state
   const [csvText, setCsvText] = useState("");
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -179,6 +208,62 @@ export default function Products() {
             </Link>
           </div>
         </div>
+
+        {/* Quick URL Save Section */}
+        <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-slate-800/50 dark:to-slate-800/80 border-l-4 border-l-blue-600">
+          <CardContent className="p-6">
+            <div className="flex flex-col md:flex-row items-end gap-4">
+              <div className="flex-1 w-full space-y-2">
+                <label className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  🔗 দ্রুত আমাজন লিংক সেভ করুন (Quick-Save URL for Later Research)
+                </label>
+                <div className="relative">
+                  <Input
+                    placeholder="https://amazon.com/dp/B08N5WRWNW বা প্রোডাক্টের যেকোনো বিবরণ ইউআরএল পেস্ট করুন..."
+                    value={quickUrl}
+                    onChange={(e) => setQuickUrl(e.target.value)}
+                    disabled={isSavingUrl}
+                    className="h-12 pr-4 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
+                  />
+                </div>
+              </div>
+              <div className="w-full md:w-[180px] space-y-2">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block">
+                  মার্কেটপ্লেস
+                </label>
+                <Select value={quickMarketplace} onValueChange={setQuickMarketplace} disabled={isSavingUrl}>
+                  <SelectTrigger className="h-12 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="US">🇺🇸 US</SelectItem>
+                    <SelectItem value="UK">🇬🇧 UK</SelectItem>
+                    <SelectItem value="DE">🇩🇪 DE</SelectItem>
+                    <SelectItem value="CA">🇨🇦 CA</SelectItem>
+                    <SelectItem value="JP">🇯🇵 JP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                onClick={handleQuickSave}
+                disabled={isSavingUrl || !quickUrl.trim()}
+                className="w-full md:w-auto h-12 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md shadow-blue-500/10 font-medium flex items-center justify-center gap-2"
+              >
+                {isSavingUrl ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    সেভ হচ্ছে...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    সেভ করুন
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4">
