@@ -4,27 +4,22 @@
 -- ============================================================
 
 -- Drop existing enum types if they exist (to avoid conflicts)
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
-    DROP TYPE user_role CASCADE;
-  END IF;
-  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'product_status') THEN
-    DROP TYPE product_status CASCADE;
-  END IF;
-  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'alert_type') THEN
-    DROP TYPE alert_type CASCADE;
-  END IF;
-  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'research_job_status') THEN
-    DROP TYPE research_job_status CASCADE;
-  END IF;
-END $$;
+-- Create enums safely without dropping tables/columns
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('user', 'admin');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- Create enums
-CREATE TYPE user_role AS ENUM ('user', 'admin');
-CREATE TYPE product_status AS ENUM ('researching', 'hot_opportunity', 'sourced', 'launched', 'archived');
-CREATE TYPE alert_type AS ENUM ('price_drop', 'bsr_change', 'new_review', 'buybox_change', 'new_competitor', 'stockout');
-CREATE TYPE research_job_status AS ENUM ('pending', 'running', 'completed', 'failed');
+DO $$ BEGIN
+  CREATE TYPE product_status AS ENUM ('researching', 'hot_opportunity', 'sourced', 'launched', 'archived');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE alert_type AS ENUM ('price_drop', 'bsr_change', 'new_review', 'buybox_change', 'new_competitor', 'stockout');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE research_job_status AS ENUM ('pending', 'running', 'completed', 'failed');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ============================================================
 -- 1. USERS TABLE (synced with Supabase Auth)
@@ -258,6 +253,12 @@ CREATE TABLE IF NOT EXISTS research_jobs (
   completed_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW() NOT NULL
 );
+
+-- Safe schema updates to handle existing tables
+ALTER TABLE products ADD COLUMN IF NOT EXISTS status product_status DEFAULT 'researching';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS folder_id INTEGER;
 
 -- ============================================================
 -- INDEXES FOR PERFORMANCE

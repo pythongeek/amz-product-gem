@@ -93,11 +93,12 @@ CREATE TABLE IF NOT EXISTS kb_restricted_categories (
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS kb_revisions (
   id SERIAL PRIMARY KEY,
-  table_name VARCHAR(50) NOT NULL,
+  table_name VARCHAR(255) NOT NULL,
   summary TEXT NOT NULL,
   revised_by VARCHAR(100) DEFAULT 'seed',
   created_at TIMESTAMP DEFAULT NOW()
 );
+ALTER TABLE kb_revisions ALTER COLUMN table_name TYPE VARCHAR(255);
 
 -- ============================================================
 -- SEED DATA — extracted from the three attached playbooks
