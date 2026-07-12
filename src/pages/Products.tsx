@@ -33,6 +33,7 @@ import {
   FileUp,
   Upload,
   Loader2,
+  Trash2,
 } from "lucide-react";
 
 const statusColors: Record<string, string> = {
@@ -86,6 +87,25 @@ export default function Products() {
       toast.error(`সেভ করতে ব্যর্থ হয়েছে: ${err.message || "Unknown error"}`);
     } finally {
       setIsSavingUrl(false);
+    }
+  };
+
+  const deleteMutation = trpc.product.delete.useMutation();
+
+  const handleDelete = async (e: React.MouseEvent, id: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm("আপনি কি নিশ্চিতভাবে এই প্রোডাক্টটি ডিলিট করতে চান?")) {
+      return;
+    }
+
+    try {
+      await deleteMutation.mutateAsync({ id });
+      toast.success("প্রোডাক্টটি সফলভাবে ডিলিট করা হয়েছে।");
+      utils.product.list.invalidate();
+    } catch (err: any) {
+      toast.error(`ডিলিট করতে ব্যর্থ হয়েছে: ${err.message || "Unknown error"}`);
     }
   };
 
@@ -324,11 +344,21 @@ export default function Products() {
                       <div className="w-14 h-14 bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 rounded-xl flex items-center justify-center">
                         <Package className="h-7 w-7 text-blue-600 dark:text-blue-400" />
                       </div>
-                      <Badge
-                        className={statusColors[product.status || "researching"]}
-                      >
-                        {statusLabels[product.status || "researching"]}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          className={statusColors[product.status || "researching"]}
+                        >
+                          {statusLabels[product.status || "researching"]}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => handleDelete(e, product.id)}
+                          className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-full"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
 
                     <h3 className="font-bold text-slate-800 dark:text-white mb-2 line-clamp-2 group-hover:text-blue-600 transition-colors">
