@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
-import { Card, CardContent } from "./ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "./ui/button";
 import { Loader2, ArrowLeft, TrendingUp, Target, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Badge } from "./ui/badge";
