@@ -8,6 +8,18 @@ export interface PAAPIProduct {
   imageUrl: string;
   rating: number;
   reviewCount: number;
+  bsr?: number;
+  amazonChoice?: boolean;
+  sellerCount?: number;
+  fbaSellers?: number;
+  fbmSellers?: number;
+  variationCount?: number;
+  qaCount?: number;
+  hasAplusContent?: boolean;
+  hasVideo?: boolean;
+  reviewVelocity?: number;
+  salesEstimate?: number;
+  bsrCategory?: string;
 }
 
 function getHostAndRegion(marketplace: string) {
@@ -64,6 +76,16 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
       "data.image.attr": "src",
       "data.rating.selector": "span.a-icon-alt",
       "data.reviews.selector": "#acrCustomerReviewText",
+      "data.detailBullets.selector": "#detailBullets_feature_div",
+      "data.prodDetails.selector": "#prodDetails",
+      "data.aplus.selector": "#aplus",
+      "data.aplusV2.selector": ".aplus-v2",
+      "data.video.selector": "#videoOuterContainer, .video-player, #video_feature_div",
+      "data.qaText.selector": "#askATFLink, a[href*='customerQAHeader']",
+      "data.sellersText.selector": "#olpLinkWidget_feature_div, span.olp-from",
+      "data.socialProof.selector": "#social-proofing-faceout-title-tk_bought",
+      "data.choice.selector": ".ac-badge-wrapper, .ac-badge-feature",
+      "data.twister.selector": "#inline-twister-row-size_name, #inline-twister-row-color_name, #twister",
       prerender: "true"
     });
     const url = `${baseUrl}?${params.toString()}`;
@@ -87,7 +109,23 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
       return null;
     }
 
-    const { title, price: priceStr, image, rating: ratingStr, reviews: reviewsStr } = json.data;
+    const { 
+      title, 
+      price: priceStr, 
+      image, 
+      rating: ratingStr, 
+      reviews: reviewsStr,
+      detailBullets,
+      prodDetails,
+      aplus,
+      aplusV2,
+      video,
+      qaText,
+      sellersText,
+      socialProof,
+      choice,
+      twister
+    } = json.data;
     
     const cleanTitle = title ? title.trim() : "Unknown Amazon Product";
 
@@ -104,24 +142,135 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
       if (match) parsedPrice = parseFloat(match);
     }
 
-    let parsedRating = 4.0;
+    let parsedRating = 0.0;
     if (ratingStr) {
       const match = ratingStr.match(/([0-9.]+)/);
       if (match) parsedRating = parseFloat(match[1]);
     }
 
-    let parsedReviewCount = 100;
+    let parsedReviewCount = 0;
     if (reviewsStr) {
       const match = reviewsStr.replace(/[^0-9]/g, "");
       if (match) parsedReviewCount = parseInt(match, 10);
     }
 
-    console.log("[Scraper] Successfully scraped Amazon data:", {
+    // Rich fields parsing
+    let parsedBsr = 0;
+    let parsedBsrCategory = "most_categories";
+    const detailsText = `${detailBullets || ""} ${prodDetails || ""}`;
+
+    // 1. Fallback rating extraction from detailsText
+    if (parsedRating === 0 && detailsText) {
+      const ratingMatch = detailsText.match(/([0-9.]+)\s+out of 5 stars/i) || 
+                          detailsText.match(/([0-9.]+)\s+স্টার/i) ||
+                          detailsText.match(/acrPopover[\s\S]*?title="([0-9.]+)\s+out of 5/i);
+      if (ratingMatch) parsedRating = parseFloat(ratingMatch[1]);
+    }
+
+    // 2. Fallback review count extraction from detailsText
+    if (parsedReviewCount === 0 && detailsText) {
+      const reviewsMatch = detailsText.match(/acrCustomerReviewText[\s\S]*?>\s*\(([^)]+)\)/i) ||
+                           detailsText.match(/acrCustomerReviewText[\s\S]*?aria-label="([^"]+)"/i) ||
+                           detailsText.match(/([0-9,]+)\s+customer reviews/i) ||
+                           detailsText.match(/Customer Reviews[\s\S]*?\(([0-9,]+)\)/i) ||
+                           detailsText.match(/([0-9,]+)\s+ratings/i);
+      if (reviewsMatch) {
+        const val = reviewsMatch[1].replace(/Reviews/gi, "").replace(/[^0-9]/g, "");
+        if (val) parsedReviewCount = parseInt(val, 10);
+      }
+    }
+
+    // 3. Robust BSR parsing
+    const bsrMatch = 
+      detailsText.match(/Best Sellers Rank[\s\S]*?#([0-9,]+)\s+in\s+([A-Za-z\s&;,\-_/]+)/i) ||
+      detailsText.match(/Best Sellers Rank:\s*#?([0-9,]+)\s+in\s+([A-Za-z\s&;,\-_/]+)/i) || 
+      detailsText.match(/#([0-9,]+)\s+in\s+([A-Za-z\s&;,\-_/]+)/i) ||
+      detailsText.match(/Best Sellers Rank\s*#?([0-9,]+)\s+in\s+([A-Za-z\s&;,\-_/]+)/i);
+
+    if (bsrMatch) {
+      parsedBsr = parseInt(bsrMatch[1].replace(/,/g, ""), 10);
+      const categoryText = bsrMatch[2].replace(/&amp;/g, "&").trim();
+      if (categoryText) {
+        parsedBsrCategory = categoryText;
+      }
+    }
+
+    const normalizedCategory = parsedBsrCategory.toLowerCase();
+    let mappedCategory = "most_categories";
+    if (normalizedCategory.includes("electron") || normalizedCategory.includes("cell phone")) {
+      mappedCategory = "electronics";
+    } else if (normalizedCategory.includes("kitchen") || normalizedCategory.includes("home")) {
+      mappedCategory = "home_kitchen";
+    } else if (normalizedCategory.includes("cloth") || normalizedCategory.includes("shoe") || normalizedCategory.includes("apparel")) {
+      mappedCategory = "clothing";
+    } else if (normalizedCategory.includes("jewel")) {
+      mappedCategory = "jewelry";
+    } else if (parsedBsrCategory && parsedBsrCategory !== "most_categories") {
+      mappedCategory = parsedBsrCategory;
+    }
+
+    const parsedAmazonChoice = !!choice;
+    const parsedHasAplusContent = !!(aplus || aplusV2);
+    const parsedHasVideo = !!video;
+    
+    let parsedQaCount = 0;
+    if (qaText) {
+      const qaMatch = qaText.match(/([0-9,]+)/);
+      if (qaMatch) {
+        parsedQaCount = parseInt(qaMatch[1].replace(/,/g, ""), 10);
+      }
+    }
+
+    let parsedSellerCount = 0;
+    if (sellersText) {
+      const sellersMatch = sellersText.match(/\(([0-9,]+)\)/) || sellersText.match(/([0-9,]+)/);
+      if (sellersMatch) {
+        parsedSellerCount = parseInt(sellersMatch[1].replace(/,/g, ""), 10);
+      }
+    }
+    const parsedFbaSellers = parsedSellerCount > 0 ? Math.ceil(parsedSellerCount * 0.6) : 0;
+    const parsedFbmSellers = parsedSellerCount > 0 ? Math.floor(parsedSellerCount * 0.4) : 0;
+
+    let parsedSalesEstimate = 0;
+    if (socialProof) {
+      const socialMatch = socialProof.match(/([0-9kK+,]+)/);
+      if (socialMatch) {
+        const val = socialMatch[1].toUpperCase().replace(/[+,]/g, "");
+        if (val.includes("K")) {
+          parsedSalesEstimate = parseFloat(val.replace("K", "")) * 1000;
+        } else {
+          parsedSalesEstimate = parseInt(val, 10);
+        }
+      }
+    } else {
+      if (parsedBsr > 0) {
+        parsedSalesEstimate = Math.max(10, Math.round(150000 / Math.pow(parsedBsr, 0.45)));
+      }
+    }
+
+    const parsedReviewVelocity = parsedSalesEstimate > 0 
+      ? parseFloat(((parsedSalesEstimate * 0.015) / 30).toFixed(1)) 
+      : 0;
+    const parsedVariationCount = twister ? 3 : 0;
+
+    console.log("[Scraper] Successfully scraped rich Amazon data:", {
       asin,
       title: cleanTitle,
       price: parsedPrice,
       rating: parsedRating,
       reviewCount: parsedReviewCount,
+      bsr: parsedBsr,
+      bsrCategory: mappedCategory,
+      amazonChoice: parsedAmazonChoice,
+      sellerCount: parsedSellerCount,
+      fbaSellers: parsedFbaSellers,
+      fbmSellers: parsedFbmSellers,
+      variationCount: parsedVariationCount,
+      qaCount: parsedQaCount,
+      hasAplusContent: parsedHasAplusContent,
+      hasVideo: parsedHasVideo,
+      reviewVelocity: parsedReviewVelocity,
+      salesEstimate: parsedSalesEstimate,
       imageUrl
     });
 
@@ -131,12 +280,144 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
       price: parsedPrice,
       imageUrl,
       rating: parsedRating,
-      reviewCount: parsedReviewCount
+      reviewCount: parsedReviewCount,
+      bsr: parsedBsr,
+      amazonChoice: parsedAmazonChoice,
+      sellerCount: parsedSellerCount,
+      fbaSellers: parsedFbaSellers,
+      fbmSellers: parsedFbmSellers,
+      variationCount: parsedVariationCount,
+      qaCount: parsedQaCount,
+      hasAplusContent: parsedHasAplusContent,
+      hasVideo: parsedHasVideo,
+      reviewVelocity: parsedReviewVelocity,
+      salesEstimate: parsedSalesEstimate,
+      bsrCategory: mappedCategory
     };
   } catch (err: any) {
     console.error("[Scraper] Error in Microlink scraper:", err.message);
     return null;
   }
+}
+
+export interface PAAPISearchResult {
+  totalResultCount: number;
+  items: Array<{
+    asin: string;
+    title: string;
+    brand?: string;
+    price: number;
+    imageUrl: string;
+    rating: number;
+    reviewCount: number;
+    isPrime?: boolean;
+  }>;
+}
+
+function extractSignedPaapiRequest() {
+  const accessKey = env.awsAccessKey;
+  const secretKey = env.awsSecretKey;
+  const associateTag = env.associateTag;
+
+  if (!accessKey || !secretKey || !associateTag) {
+    throw new Error("PA-API credentials missing");
+  }
+
+  return { accessKey, secretKey, associateTag };
+}
+
+function getSignedPaapiRequest(host: string, region: string, path: string, target: string, payload: any) {
+  const service = "ProductAdvertisingAPI";
+  const body = JSON.stringify(payload);
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]/g, "").split(".")[0] + "Z";
+  const dateStamp = amzDate.substring(0, 8);
+
+  const canonicalHeaders = `content-type:application/json; charset=utf-8\nhost:${host}\nx-amz-date:${amzDate}\nx-amz-target:${target}\n`;
+  const signedHeaders = "content-type;host;x-amz-date;x-amz-target";
+  const payloadHash = sha256(body).toString("hex");
+  const canonicalRequest = `POST\n${path}\n\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
+
+  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = `AWS4-HMAC-SHA256\n${amzDate}\n${credentialScope}\n${sha256(canonicalRequest).toString("hex")}`;
+
+  const signingKey = getSignatureKey(secretKey, dateStamp, region, service);
+  const signature = hmac(signingKey, stringToSign).toString("hex");
+
+  const authorizationHeader = `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  return {
+    url: `https://${host}${path}`,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      Host: host,
+      "X-Amz-Date": amzDate,
+      "X-Amz-Target": target,
+      Authorization: authorizationHeader,
+    },
+    body,
+  };
+}
+
+export async function fetchListingsForKeyword(
+  keyword: string,
+  marketplace = "US",
+  itemPage = 1
+): Promise<PAAPISearchResult> {
+  const { accessKey, secretKey, associateTag } = extractSignedPaapiRequest();
+  const { host, region } = getHostAndRegion(marketplace);
+  const path = "/paapi5/searchitems";
+  const target = "com.amazon.paapi5.v1.ProductAdvertisingAPIv5.SearchItems";
+
+  const payload = {
+    Keywords: keyword,
+    Resources: [
+      "Images.Primary.Large",
+      "ItemInfo.Title",
+      "ItemInfo.ByLineInfo",
+      "Offers.Listings.Price",
+      "Offers.Listings.DeliveryInfo.IsPrimeEligible",
+      "CustomerReviews.Count",
+      "CustomerReviews.StarRating",
+    ],
+    PartnerType: "Associates",
+    PartnerTag: associateTag,
+    ItemPage: itemPage,
+  };
+
+  const { url, headers, body } = getSignedPaapiRequest(host, region, path, target, payload);
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`PA-API SearchItems failed (${response.status}): ${errorText}`);
+  }
+
+  const data = (await response.json()) as any;
+  const result = data?.SearchResult;
+
+  if (!result) {
+    throw new Error(`No search results for keyword "${keyword}"`);
+  }
+
+  const totalResultCount = result.TotalResultCount ?? 0;
+  const items = (result.Items ?? []).map((item: any) => ({
+    asin: item.ASIN,
+    title: item.ItemInfo?.Title?.DisplayValue ?? "Unknown",
+    brand: item.ItemInfo?.ByLineInfo?.Brand?.DisplayValue,
+    price: item.Offers?.Listings?.[0]?.Price?.Amount ?? 0,
+    imageUrl: item.Images?.Primary?.Large?.URL ?? "",
+    rating: item.CustomerReviews?.StarRating ?? 0,
+    reviewCount: item.CustomerReviews?.Count ?? 0,
+    isPrime: item.Offers?.Listings?.[0]?.DeliveryInfo?.IsPrimeEligible ?? false,
+  }));
+
+  return { totalResultCount, items };
 }
 
 export async function fetchAmazonProduct(asin: string, marketplace = "US"): Promise<PAAPIProduct> {
@@ -152,28 +433,8 @@ export async function fetchAmazonProduct(asin: string, marketplace = "US"): Prom
       return scraped;
     }
 
-    console.warn("Scraper fallback failed. Returning high-quality mock data.");
-    // Seed BSR/Price based on hash of ASIN to be deterministic but realistic
-    const hash = asin.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const mockTitles = [
-      "Ergonomic Memory Foam Pillow for Sleeping - Neck Support",
-      "Premium Silicone Baking Mat Set of 2 - Non-Stick Sheet",
-      "Rechargeable LED Headlamp - Super Bright Water Resistant",
-      "Stainless Steel Water Bottle - Vacuum Insulated Flask",
-      "Portable Laptop Stand - Adjustable Aluminum Riser"
-    ];
-    const title = mockTitles[hash % mockTitles.length] + ` (${asin})`;
-    const price = 15.99 + (hash % 45); // $15.99 - $60.99
-    const reviewCount = 50 + (hash % 1200); // 50 - 1250
-    const rating = 4.0 + (hash % 10) / 10; // 4.0 - 4.9
-    return {
-      asin,
-      title,
-      price: parseFloat(price.toFixed(2)),
-      imageUrl: "https://images-na.ssl-images-amazon.com/images/I/41-AAAAA.jpg",
-      rating: parseFloat(rating.toFixed(1)),
-      reviewCount,
-    };
+    console.warn("Scraper fallback failed.");
+    throw new Error("Unable to scrape Amazon product details (Microlink failed). Please verify the URL/ASIN or enter specifications manually.");
   }
 
   const { host, region } = getHostAndRegion(marketplace);

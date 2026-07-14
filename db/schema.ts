@@ -328,7 +328,52 @@ export const productSnapshots = pgTable("product_snapshots", {
   capturedAt: timestamp("captured_at").defaultNow().notNull(),
 });
 
-// Type exports
+// Keyword Search tables
+export const keywordSearchStatusEnum = pgEnum("keyword_search_status", [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+]);
+
+// One row per keyword/URL search the user runs
+export const keywordSearches = pgTable("keyword_searches", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  rawInput: text("raw_input").notNull(),
+  keyword: varchar("keyword", { length: 255 }).notNull(),
+  marketplace: varchar("marketplace", { length: 10 }).default("US"),
+  totalResultCount: integer("total_result_count"),
+  status: keywordSearchStatusEnum("status").default("pending").notNull(),
+  dataSource: varchar("data_source", { length: 20 }).default("paapi"), // "paapi" | "serp_api" | "manual_scrape"
+  summaryReport: text("summary_report"),
+  aggregateScores: jsonb("aggregate_scores"),
+  error: text("error"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// One row per listing found for that search (page-1 items)
+export const keywordSearchListings = pgTable("keyword_search_listings", {
+  id: serial("id").primaryKey(),
+  searchId: integer("search_id").references(() => keywordSearches.id).notNull(),
+  position: integer("position").notNull(),
+  asin: varchar("asin", { length: 20 }).notNull(),
+  title: text("title"),
+  brand: varchar("brand", { length: 255 }),
+  price: decimal("price", { precision: 10, scale: 2 }),
+  rating: decimal("rating", { precision: 3, scale: 1 }),
+  reviewCount: integer("review_count"),
+  imageUrl: text("image_url"),
+  isSponsored: boolean("is_sponsored").default(false),
+  isAmazonChoice: boolean("is_amazon_choice").default(false),
+  isPrime: boolean("is_prime").default(false),
+  perListingScore: integer("per_listing_score"),
+  perListingVerdict: varchar("per_listing_verdict", { length: 20 }), // "strong" | "vulnerable" | "avoid"
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Product = typeof products.$inferSelect;
@@ -353,3 +398,7 @@ export type KbPlaybook = typeof kbPlaybook.$inferSelect;
 export type KbRestrictedCategory = typeof kbRestrictedCategories.$inferSelect;
 export type KbRevision = typeof kbRevisions.$inferSelect;
 export type ProductSnapshot = typeof productSnapshots.$inferSelect;
+export type KeywordSearch = typeof keywordSearches.$inferSelect;
+export type InsertKeywordSearch = typeof keywordSearches.$inferInsert;
+export type KeywordSearchListing = typeof keywordSearchListings.$inferSelect;
+export type InsertKeywordSearchListing = typeof keywordSearchListings.$inferInsert;
