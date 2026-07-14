@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "./ui/button";
+import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft, TrendingUp, Target, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { Badge } from "./ui/badge";
-import { Skeleton } from "./ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface LocationState {
   searchId: number;
