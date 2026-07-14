@@ -30,6 +30,9 @@ const requireCronSecret = async (c: any, next: any) => {
   return c.json({ ok: false, error: err.message }, 500);
 };
 
+// Apply middleware to all cron routes
+cronApp.use("*", requireCronSecret);
+
 // ── 2. Process Pending Keyword Search Jobs ────────────────────────────
 // Called every 5 minutes by cron-jobs.org.
 // This bypasses Vercel's 8s function timeout because:
