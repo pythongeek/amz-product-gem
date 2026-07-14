@@ -25,10 +25,10 @@ const requireCronSecret = async (c: any, next: any) => {
   if (!env.cronSecret || secret !== env.cronSecret) {
     return c.json({ error: "Unauthorized — invalid or missing x-cron-secret" }, 401);
   }
-  } catch (err: any) {
-    return c.json({ ok: false, error: err.message }, 500);
-  }
-});
+  await next();
+} catch (err: any) {
+  return c.json({ ok: false, error: err.message }, 500);
+};
 
 // ── 2. Process Pending Keyword Search Jobs ────────────────────────────
 // Called every 5 minutes by cron-jobs.org.
