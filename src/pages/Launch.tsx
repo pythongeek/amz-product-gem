@@ -1,12 +1,13 @@
 import { ProtectedLayout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { useParams } from "react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import {
   Rocket,
   Loader2,
@@ -25,6 +26,9 @@ export default function Launch() {
   const { productId } = useParams<{ productId: string }>();
   const id = parseInt(productId || "0");
 
+  const { data: product } = trpc.product.getById.useQuery({ id }, { enabled: !!id });
+  const { data: existingStrategies } = trpc.launch.getByProduct.useQuery({ productId: id }, { enabled: !!id });
+
   const [productTitle, setProductTitle] = useState("");
   const [category, setCategory] = useState("");
   const [targetPrice, setTargetPrice] = useState("");
@@ -34,6 +38,27 @@ export default function Launch() {
   const [strategy, setStrategy] = useState<any>(null);
 
   const generateMutation = trpc.launch.generate.useMutation();
+
+  // Pre-populate fields from product details
+  useEffect(() => {
+    if (product) {
+      setProductTitle(product.title || "");
+      setCategory(product.bsrCategory || "General");
+      setTargetPrice(product.price ? String(product.price) : "29.99");
+      setCompetitorPrice(product.price ? String((Number(product.price) * 1.1).toFixed(2)) : "34.99");
+    }
+  }, [product]);
+
+  // Pre-load existing strategy if already generated
+  useEffect(() => {
+    if (existingStrategies && existingStrategies.length > 0) {
+      const latest = existingStrategies[existingStrategies.length - 1];
+      setStrategy({
+        strategy: latest,
+        fullText: latest.content,
+      });
+    }
+  }, [existingStrategies]);
 
   const handleGenerate = async () => {
     if (!productTitle) return;
@@ -50,8 +75,9 @@ export default function Launch() {
         budget: budget ? parseFloat(budget) : undefined,
       });
       setStrategy(result);
-    } catch (error) {
-      console.error(error);
+      toast.success("লঞ্চ স্ট্র্যাটেজি সফলভাবে জেনারেট হয়েছে!");
+    } catch (error: any) {
+      toast.error(`লঞ্চ স্ট্র্যাটেজি তৈরি ব্যর্থ হয়েছে: ${error.message || "Unknown error"}`);
     } finally {
       setIsGenerating(false);
     }
@@ -68,6 +94,31 @@ export default function Launch() {
           <p className="text-slate-500 dark:text-slate-400">
             AI-পাওয়ার্ড Day 0-90 লঞ্চ প্ল্যান তৈরি করুন
           </p>
+          {product && (
+            <div className="mt-3 text-sm">
+              <a
+                href={(() => {
+                  const domainMap: Record<string, string> = {
+                    US: "amazon.com",
+                    UK: "amazon.co.uk",
+                    DE: "amazon.de",
+                    CA: "amazon.ca",
+                    FR: "amazon.fr",
+                    IT: "amazon.it",
+                    ES: "amazon.es",
+                    JP: "amazon.co.jp",
+                  };
+                  const domain = domainMap[(product.marketplace || "US").toUpperCase()] || "amazon.com";
+                  return `https://www.${domain}/dp/${product.asin}`;
+                })()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+              >
+                আমাজন লিস্টিং দেখুন ({product.asin}) 🔗
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Input Form */}

@@ -274,7 +274,7 @@ export default function ProductDetail() {
             </Card>
           </Link>
 
-          <Link to="/calculator">
+          <Link to={`/calculator?productId=${product.id}`}>
             <Card className="border-0 shadow-md hover:shadow-lg transition-all cursor-pointer group">
               <CardContent className="p-5">
                 <div className="flex items-center gap-4">
@@ -294,7 +294,7 @@ export default function ProductDetail() {
             </Card>
           </Link>
 
-          <Link to="/reports">
+          <Link to={`/reports?productId=${product.id}`}>
             <Card className="border-0 shadow-md hover:shadow-lg transition-all cursor-pointer group">
               <CardContent className="p-5">
                 <div className="flex items-center gap-4">

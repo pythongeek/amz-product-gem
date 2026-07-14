@@ -1,7 +1,8 @@
 import { ProtectedLayout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useSearchParams, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +35,7 @@ import {
   Loader2,
   Info,
   ShieldAlert,
+  Zap,
 } from "lucide-react";
 
 const categories = [
@@ -55,6 +57,16 @@ const sizeTiers = [
 
 export default function Calculator() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const productIdStr = searchParams.get("productId");
+  const parsedProductId = productIdStr ? parseInt(productIdStr) : null;
+
+  const { data: product } = trpc.product.getById.useQuery(
+    { id: parsedProductId || 0 },
+    { enabled: !!parsedProductId }
+  );
+
   const [sellingPrice, setSellingPrice] = useState("29.99");
   const [productCost, setProductCost] = useState("7.00");
   const [shippingCost, setShippingCost] = useState("1.50");
@@ -74,11 +86,32 @@ export default function Calculator() {
     enabled: (user as any)?.experienceLevel === "advanced",
   });
 
+  // Pre-populate fields from product details
+  useEffect(() => {
+    if (product) {
+      if (product.price) setSellingPrice(String(product.price));
+      if (product.bsrCategory) {
+        const catLower = product.bsrCategory.toLowerCase();
+        if (catLower.includes("elect")) {
+          setCategory("electronics");
+        } else if (catLower.includes("cloth") || catLower.includes("apparel")) {
+          setCategory("clothing");
+        } else if (catLower.includes("jewel")) {
+          setCategory("jewelry");
+        } else if (catLower.includes("home") || catLower.includes("kitchen")) {
+          setCategory("home_kitchen");
+        } else {
+          setCategory("most_categories");
+        }
+      }
+    }
+  }, [product]);
+
   const handleCalculate = async () => {
     setIsCalculating(true);
     try {
       const calcResult = await calculateMutation.mutateAsync({
-        productId: 1, // demo
+        productId: parsedProductId || 1, // pass real product ID if available, else fallback
         sellingPrice: parseFloat(sellingPrice),
         productCost: parseFloat(productCost),
         shippingCost: parseFloat(shippingCost),
@@ -141,13 +174,24 @@ export default function Calculator() {
     <ProtectedLayout>
       <div className="space-y-8 max-w-5xl mx-auto">
         {/* Header */}
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
-            FBA প্রফিট ক্যালকুলেটর
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400">
-            Amazon FBA ফি হিসেব করে নিট লাভ বের করুন (২০২৬ রেটস)
-          </p>
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+              FBA প্রফিট ক্যালকুলেটর
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400">
+              Amazon FBA ফি হিসেব করে নিট লাভ বের করুন (২০২৬ রেটস)
+            </p>
+          </div>
+          {parsedProductId && (
+            <Button
+              onClick={() => navigate(`/launch/${parsedProductId}`)}
+              className="rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 font-semibold text-white shadow-md hover:shadow-lg transition-all flex items-center gap-1.5"
+            >
+              <Zap className="h-4 w-4" />
+              লঞ্চ স্ট্র্যাটেজি দেখুন
+            </Button>
+          )}
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8">

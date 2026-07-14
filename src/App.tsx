@@ -13,6 +13,7 @@ import Alerts from "./pages/Alerts";
 import Settings from "./pages/Settings";
 import KnowledgeBase from "./pages/admin/KnowledgeBase";
 import NotFound from "./pages/NotFound";
+import KeywordResearchResults from "./pages/KeywordResearchResults";
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/research" element={<Research />} />
       <Route path="/research/results" element={<ResearchResults />} />
+      <Route path="/research/keyword-results" element={<KeywordResearchResults />} />
       <Route path="/products" element={<Products />} />
       <Route path="/products/:id" element={<ProductDetail />} />
       <Route path="/calculator" element={<Calculator />} />

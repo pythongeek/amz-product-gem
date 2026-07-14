@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { researchJobs } from "@db/schema";
-import { eq, desc } from "drizzle-orm";
+import { researchJobs, products, reports } from "@db/schema";
+import { eq, desc, and } from "drizzle-orm";
 
 export const jobRouter = createRouter({
   // ── Submit Research Job (Queue-based, returns immediately) ──
@@ -52,6 +52,28 @@ export const jobRouter = createRouter({
         throw new Error("Unauthorized");
       }
 
+      let productId: number | null = null;
+      if (job.status === "completed") {
+        const pRows = await db
+          .select()
+          .from(products)
+          .where(and(eq(products.userId, ctx.user.id), eq(products.asin, "RESEARCH-" + job.id)))
+          .limit(1);
+        if (pRows[0]) {
+          productId = pRows[0].id;
+        } else {
+          const rRows = await db
+            .select()
+            .from(reports)
+            .where(and(eq(reports.userId, ctx.user.id), eq(reports.title, job.input)))
+            .orderBy(desc(reports.createdAt))
+            .limit(1);
+          if (rRows[0]) {
+            productId = rRows[0].productId;
+          }
+        }
+      }
+
       return {
         id: job.id,
         status: job.status,
@@ -60,6 +82,7 @@ export const jobRouter = createRouter({
         result: job.result,
         scores: job.scores,
         error: job.error,
+        productId,
         createdAt: job.createdAt,
         completedAt: job.completedAt,
       };

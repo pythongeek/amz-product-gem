@@ -200,23 +200,33 @@ export default function Research() {
           <p className="text-slate-500 dark:text-slate-400">
             Amazon প্রোডাক্ট রিসার্চ বা ম্যানুয়াল ডাটা দিয়ে প্রফিট ও ভ্যালিডেশন নির্ণয় করুন
           </p>
-        </div>
-
         {/* Main Input Card with Tabs */}
         <Card className="border-0 shadow-xl shadow-slate-200/50 dark:shadow-slate-800/50 bg-white dark:bg-slate-800 overflow-hidden">
           <CardContent className="p-8">
-            <Tabs defaultValue="auto" className="w-full">
+            <Tabs defaultValue="single" className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-8 bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl">
-                <TabsTrigger value="auto" className="rounded-lg py-3 text-sm font-semibold">
-                  🔍 স্বয়ংক্রিয় AI রিসার্চ
+                <TabsTrigger value="single" className="rounded-lg py-3 text-sm font-semibold">
+                  🔍 সিঙ্গেল প্রোডাক্ট রিসার্চ
                 </TabsTrigger>
-                <TabsTrigger value="manual" className="rounded-lg py-3 text-sm font-semibold">
-                  ✍️ ম্যানুয়াল প্রোডাক্ট এন্ট্রি (উন্নত)
+                <TabsTrigger value="keyword" className="rounded-lg py-3 text-sm font-semibold">
+                  🔍 কীওয়ার্ড/লিস্টিং বিশ্লেষণ
                 </TabsTrigger>
               </TabsList>
 
-              {/* Automatic Search */}
-              <TabsContent value="auto" className="space-y-6">
+              {/* Single Product Research */}
+              <TabsContent value="single">
+                <Tabs defaultValue="auto" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 mb-8 bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl">
+                    <TabsTrigger value="auto" className="rounded-lg py-3 text-sm font-semibold">
+                      🔍 স্বয়ংক্রিয় AI রিসার্চ
+                    </TabsTrigger>
+                    <TabsTrigger value="manual" className="rounded-lg py-3 text-sm font-semibold">
+                      ✍️ ম্যানুয়াল প্রোডাক্ট এন্ট্রি (উন্নত)
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {/* Automatic Search */}
+                  <TabsContent value="auto" className="space-y-6">
                 <div className="space-y-4">
                   <div>
                     <Label className="text-base font-medium text-slate-700 dark:text-slate-200 mb-2 block">
@@ -499,6 +509,9 @@ export default function Research() {
                     </>
                   )}
                 </Button>
+              {/* Keyword Research */}
+              <TabsContent value="keyword">
+                <KeywordResearchForm />
               </TabsContent>
             </Tabs>
           </CardContent>

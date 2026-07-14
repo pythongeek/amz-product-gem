@@ -392,6 +392,18 @@ export const productRouter = createRouter({
       let bsr = 15000;
       let imageUrl = "";
 
+      let amazonChoice = false;
+      let sellerCount = 1;
+      let fbaSellers = 1;
+      let fbmSellers = 0;
+      let variationCount = 0;
+      let qaCount = 0;
+      let hasAplusContent = false;
+      let hasVideo = false;
+      let reviewVelocity = 0.5;
+      let salesEstimate = 150;
+      let bsrCategory = "most_categories";
+
       try {
         const data = await fetchAmazonProduct(asin, input.marketplace);
         if (data && data.title) {
@@ -400,6 +412,19 @@ export const productRouter = createRouter({
           if (data.rating) rating = data.rating;
           if (data.reviewCount) reviewCount = data.reviewCount;
           if (data.imageUrl) imageUrl = data.imageUrl;
+
+          if (data.bsr !== undefined) bsr = data.bsr;
+          if (data.amazonChoice !== undefined) amazonChoice = data.amazonChoice;
+          if (data.sellerCount !== undefined) sellerCount = data.sellerCount;
+          if (data.fbaSellers !== undefined) fbaSellers = data.fbaSellers;
+          if (data.fbmSellers !== undefined) fbmSellers = data.fbmSellers;
+          if (data.variationCount !== undefined) variationCount = data.variationCount;
+          if (data.qaCount !== undefined) qaCount = data.qaCount;
+          if (data.hasAplusContent !== undefined) hasAplusContent = data.hasAplusContent;
+          if (data.hasVideo !== undefined) hasVideo = data.hasVideo;
+          if (data.reviewVelocity !== undefined) reviewVelocity = data.reviewVelocity;
+          if (data.salesEstimate !== undefined) salesEstimate = data.salesEstimate;
+          if (data.bsrCategory !== undefined) bsrCategory = data.bsrCategory;
         }
       } catch (err: any) {
         console.warn("[quickSaveUrl] PA-API fetch failed, saving with defaults:", err.message);
@@ -418,8 +443,64 @@ export const productRouter = createRouter({
           imageUrl,
           marketplace: input.marketplace,
           status: "researching",
+          amazonChoice,
+          sellerCount,
+          fbaSellers,
+          fbmSellers,
+          variationCount,
+          qaCount,
+          hasAplusContent,
+          hasVideo,
+          reviewVelocity: String(reviewVelocity),
+          salesEstimate,
+          bsrCategory,
         })
         .returning();
+
+      // Recalculate 13-point score
+      const { scores, totalScore, grade, recommendation } = await scoreProduct({
+        price,
+        weight: 1.0,
+        bsr,
+        reviewCount,
+        sellerCount,
+        category: bsrCategory,
+        marketplace: input.marketplace,
+        hasBattery: false,
+        isElectronic: false,
+        isFragile: false,
+      });
+
+      // Save scores to productScores table
+      await db.insert(productScores).values({
+        productId: product.id,
+        userId: ctx.user.id,
+        priceScore: scores.priceScore,
+        sizeWeightScore: scores.sizeWeightScore,
+        marketSizeScore: scores.marketSizeScore,
+        reviewBarrierScore: scores.reviewBarrierScore,
+        differentiationScore: scores.differentiationScore,
+        seasonalityScore: scores.seasonalityScore,
+        complexityScore: scores.complexityScore,
+        returnRateScore: scores.returnRateScore,
+        brandDominanceScore: scores.brandDominanceScore,
+        trendScore: scores.trendScore,
+        defensibilityScore: scores.defensibilityScore,
+        manufacturabilityScore: scores.manufacturabilityScore,
+        marginScore: scores.marginScore,
+        totalScore,
+        grade,
+        recommendation,
+        analysisData: {
+          price,
+          weight: 1.0,
+          bsr,
+          reviewCount,
+          sellerCount,
+          category: bsrCategory,
+          calculatedAt: new Date().toISOString(),
+        },
+      });
 
       await db.insert(productSnapshots).values({
         productId: product.id,

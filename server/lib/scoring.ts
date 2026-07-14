@@ -11,6 +11,8 @@ export interface ProductInput {
   isElectronic?: boolean;
   isFragile?: boolean;
   marketplace?: string;
+  rating?: number;
+  salesEstimate?: number;
 }
 
 export function extractSpecsFromReport(content: string): ProductInput {
@@ -62,6 +64,17 @@ export function extractSpecsFromReport(content: string): ProductInput {
     if (/battery|ব্যাটারি|চার্জার/i.test(content)) specs.hasBattery = true;
     if (/electronic|ইলেকট্রনিক|ডিভাইস/i.test(content)) specs.isElectronic = true;
     if (/glass|ceramic|fragile|কাঁচ|ভঙ্গুর/i.test(content)) specs.isFragile = true;
+
+    // Extract rating
+    const ratingMatch = content.match(/রেটিং\s*\|\s*([0-9.]+)/i) || 
+                        content.match(/rating\s*:\s*([0-9.]+)/i);
+    if (ratingMatch) specs.rating = parseFloat(ratingMatch[1]);
+
+    // Extract sales estimate
+    const salesMatch = content.match(/মাসিক সেলস\s*\|\s*([0-9,]+)/i) || 
+                       content.match(/monthly sales\s*:\s*([0-9,]+)/i) ||
+                       content.match(/sales\s*:\s*([0-9,]+)/i);
+    if (salesMatch) specs.salesEstimate = parseInt(salesMatch[1].replace(/,/g, ""));
 
   } catch (err) {
     console.warn("Failed to extract specs from report:", err);

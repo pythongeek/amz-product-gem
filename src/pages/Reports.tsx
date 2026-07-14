@@ -1,46 +1,89 @@
 import { ProtectedLayout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
 import {
   FileText,
   Download,
   Sparkles,
   Loader2,
   FileDown,
+  Zap,
 } from "lucide-react";
 
 export default function Reports() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const productIdStr = searchParams.get("productId");
+  const parsedProductId = productIdStr ? parseInt(productIdStr) : null;
+
   const [searchTerm, setSearchTerm] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedReport, setGeneratedReport] = useState("");
 
-  const reportMutation = trpc.analysis.generateReport.useMutation();
+  const { data: userProducts } = trpc.product.list.useQuery();
+  const { data: existingReport, isLoading: isReportLoading } = trpc.analysis.getReportByProduct.useQuery(
+    { productId: parsedProductId || 0 },
+    { enabled: !!parsedProductId }
+  );
 
-  // Demo: generate a report on demand
+  const reportMutation = trpc.analysis.generateReport.useMutation();
+  const createReportMutation = trpc.analysis.createReport.useMutation();
+
+  // Load existing report
+  useEffect(() => {
+    if (existingReport) {
+      setGeneratedReport(existingReport.content || "");
+      setSearchTerm(existingReport.title || "");
+    } else {
+      setGeneratedReport("");
+    }
+  }, [existingReport]);
+
   const handleGenerateReport = async () => {
-    if (!searchTerm) return;
-    setIsGenerating(true);
-    try {
-      const result = await reportMutation.mutateAsync({
-        title: searchTerm,
-        asin: `DEMO-${Date.now()}`,
-        analysis: `Demo analysis for ${searchTerm}`,
-        scores: {
-          totalScore: 85,
-          grade: "B",
-          recommendation: "সতর্কতা (CAUTION) — ঝুঁকি আছে কিন্তু সুযোগও আছে",
-        },
-      });
-      setGeneratedReport(result.report);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsGenerating(false);
+    if (parsedProductId) {
+      setIsGenerating(true);
+      try {
+        const result = await createReportMutation.mutateAsync({ productId: parsedProductId });
+        setGeneratedReport(result.content || "");
+        toast.success("বাংলা রিসার্চ রিপোর্ট সফলভাবে তৈরি করা হয়েছে!");
+      } catch (error: any) {
+        toast.error(`রিপোর্ট জেনারেশন ব্যর্থ হয়েছে: ${error.message || "Unknown error"}`);
+      } finally {
+        setIsGenerating(false);
+      }
+    } else if (searchTerm) {
+      setIsGenerating(true);
+      try {
+        const result = await reportMutation.mutateAsync({
+          title: searchTerm,
+          asin: `DEMO-${Date.now()}`,
+          analysis: `Demo analysis for ${searchTerm}`,
+          scores: {
+            totalScore: 85,
+            grade: "B",
+            recommendation: "সতর্কতা (CAUTION) — ঝুঁকি আছে কিন্তু সুযোগও আছে",
+          },
+        });
+        setGeneratedReport(result.report);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsGenerating(false);
+      }
     }
   };
 
@@ -102,7 +145,7 @@ export default function Reports() {
     <ProtectedLayout>
       <div className="space-y-8 max-w-5xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
               রিসার্চ রিপোর্টস
@@ -111,6 +154,15 @@ export default function Reports() {
               AI-জেনারেটেড বাংলা রিপোর্ট দেখুন ও এক্সপোর্ট করুন
             </p>
           </div>
+          {parsedProductId && (
+            <Button
+              onClick={() => navigate(`/launch/${parsedProductId}`)}
+              className="rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 font-semibold text-white shadow-md hover:shadow-lg transition-all flex items-center gap-1.5"
+            >
+              <Zap className="h-4 w-4" />
+              লঞ্চ স্ট্র্যাটেজি দেখুন
+            </Button>
+          )}
         </div>
 
         {/* Generate Report Section */}
@@ -118,29 +170,91 @@ export default function Reports() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-blue-600" />
-              নতুন রিপোর্ট জেনারেট করুন
+              প্রোডাক্ট ভিত্তিক রিসার্চ রিপোর্ট
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex gap-4">
-              <Input
-                placeholder="প্রোডাক্ট টাইটেল বা কীওয়ার্ড দিন..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-12 rounded-xl flex-1"
-              />
-              <Button
-                onClick={handleGenerateReport}
-                disabled={isGenerating || !searchTerm}
-                className="h-12 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600"
-              >
-                {isGenerating ? (
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                ) : (
-                  <Sparkles className="h-5 w-5 mr-2" />
-                )}
-                জেনারেট
-              </Button>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-slate-500 mb-1.5 block">
+                  রিসার্চড প্রোডাক্ট সিলেক্ট করুন
+                </label>
+                <Select
+                  value={productIdStr || "none"}
+                  onValueChange={(val) => {
+                    if (val === "none") {
+                      setSearchParams({});
+                    } else {
+                      setSearchParams({ productId: val });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-12 rounded-xl bg-slate-50 dark:bg-slate-800">
+                    <SelectValue placeholder="ক্লিক করা প্রোডাক্ট বা যেকোনো রিসেন্ট প্রোডাক্ট সিলেক্ট করুন" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- কোন প্রোডাক্ট সিলেক্ট করা নেই (ম্যানুয়াল সার্চ) --</SelectItem>
+                    {userProducts?.map((p) => (
+                      <SelectItem key={p.id} value={p.id.toString()}>
+                        {p.title || p.asin} ({p.marketplace})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {!parsedProductId && (
+                <div>
+                  <label className="text-sm font-medium text-slate-500 mb-1.5 block">
+                    অথবা ম্যানুয়াল কীওয়ার্ড দিয়ে সার্চ করুন
+                  </label>
+                  <div className="flex gap-4">
+                    <Input
+                      placeholder="প্রোডাক্ট টাইটেল বা কীওয়ার্ড দিন..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="h-12 rounded-xl flex-1"
+                    />
+                    <Button
+                      onClick={handleGenerateReport}
+                      disabled={isGenerating || !searchTerm}
+                      className="h-12 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600"
+                    >
+                      {isGenerating ? (
+                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-5 w-5 mr-2" />
+                      )}
+                      জেনারেট
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {parsedProductId && !generatedReport && !isReportLoading && (
+                <div className="p-6 bg-slate-50 dark:bg-slate-900/50 rounded-xl text-center">
+                  <p className="text-slate-500 mb-4 font-medium">এই প্রোডাক্টের জন্য কোনো বাংলা রিসার্চ রিপোর্ট পূর্বে জেনারেট করা হয়নি।</p>
+                  <Button
+                    onClick={handleGenerateReport}
+                    disabled={isGenerating}
+                    className="h-12 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 font-semibold"
+                  >
+                    {isGenerating ? (
+                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-5 w-5 mr-2" />
+                    )}
+                    বাংলা রিপোর্ট জেনারেট করুন
+                  </Button>
+                </div>
+              )}
+
+              {isReportLoading && (
+                <div className="py-12 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600 mb-2" />
+                  <p className="text-slate-500">রিপোর্ট লোড হচ্ছে...</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

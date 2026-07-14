@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { launchStrategies } from "@db/schema";
+import { launchStrategies, products, productScores } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { callAIWithFallback, BANGLA_SYSTEM_PROMPT } from "./lib/ai";
 
@@ -18,56 +18,89 @@ export const launchRouter = createRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const prompt = `"${input.productTitle}" প্রোডাক্টটি Amazon-ে লঞ্চ করার জন্য একটি সম্পূর্ণ স্ট্র্যাটেজি তৈরি করুন।
+      const db = getDb();
 
-তথ্য:
-- ক্যাটাগরি: ${input.category || "General"}
-- টার্গেট প্রাইজ: $${input.targetPrice || "N/A"}
+      // Retrieve product specifications from database
+      const productRows = await db
+        .select()
+        .from(products)
+        .where(eq(products.id, input.productId))
+        .limit(1);
+      const product = productRows[0];
+      if (!product) throw new Error("Product not found");
+
+      // Retrieve validation scores to inspect battery/electronic/fragile flags
+      const scoreRows = await db
+        .select()
+        .from(productScores)
+        .where(eq(productScores.productId, product.id))
+        .limit(1);
+      const productScore = scoreRows[0];
+
+      const analysisData = (productScore?.analysisData || {}) as any;
+      const hasBattery = !!analysisData.hasBattery;
+      const isElectronic = !!analysisData.isElectronic;
+      const isFragile = !!analysisData.isFragile;
+
+      const salesEstimate = product.salesEstimate || 300;
+      const rating = product.rating ? parseFloat(String(product.rating)) : 4.0;
+      const reviewCount = product.reviewCount || 0;
+
+      // Ground the AI Prompt with real product constraints
+      const prompt = `"${input.productTitle}" (ASIN: ${product.asin}) প্রোডাক্টটি Amazon-ে লঞ্চ করার জন্য একটি সম্পূর্ণ ডে-টু-ডে লঞ্চ স্ট্র্যাটেজি তৈরি করুন।
+
+প্রোডাক্টের বাস্তব তথ্য:
+- ক্যাটাগরি: ${input.category || product.bsrCategory || "General"}
+- টার্গেট প্রাইজ: $${input.targetPrice || product.price || "N/A"}
 - কম্পিটিটর প্রাইজ: $${input.competitorPrice || "N/A"}
-- বাজেট: $${input.budget || "N/A"}
+- ব্যাটারি ফিচার: ${hasBattery ? "হ্যাঁ (MSDS/UN38.3 সার্টিফিকেট প্রয়োজন)" : "না"}
+- ইলেকট্রনিক ফিচার: ${isElectronic ? "হ্যাঁ (FCC/CE কমপ্লায়েন্স প্রয়োজন)" : "না"}
+- ভঙ্গুর প্রোডাক্ট: ${isFragile ? "হ্যাঁ (অতিরিক্ত বাবল র্যাপ এবং ৩-ফুট ড্রপ টেস্ট প্রয়োজন)" : "না"}
+- মাসিক সেলস এস্টিমেট: ${salesEstimate} ইউনিট
+- বর্তমান রিভিউ সংখ্যা: ${reviewCount} (রেটিং: ${rating}/5)
 
-বাংলায় এই সেকশনগুলোতে দিন:
+বাংলায় এই সেকশনগুলোতে বিবরণ দিন:
 
 # 🎯 লিস্টিং অপ্টিমাইজেশন
 - SEO টাইটল (২০০ ক্যারেক্টার)
-- ৫টি বুলেট পয়েন্ট
-- ব্যাকএন্ড কীওয়ার্ড
+- ৫টি সুবিধা ভিত্তিক বুলেট পয়েন্ট
+- ব্যাকএন্ড কীওয়ার্ড (২৫০ বাইট)
 
 # 💰 প্রাইসিং স্ট্র্যাটেজি
 - ফেজ ১ (১-১৪ দিন): পেনেট্রেশন প্রাইসিং
 - ফেজ ২ (১৫-৪৫ দিন): কম্পিটিটিভ প্রাইসিং
-- ফেজ ৩ (৪৬+ দিন): প্রিমিয়াম প্রাইসিং
+- ফেজ ৩ (৪৬+ দিন): প্রিমিয়াম প্রাইসিং (রিভিউ আসার পর)
 
 # 📢 PPC ক্যাম্পেইন স্ট্রাকচার
-- অটো ক্যাম্পেইন সেটআপ
-- ম্যানুয়াল ক্যাম্পেইন
-- বাজেট অ্যালোকেশন
+- অটো ক্যাম্পেইন ও কীওয়ার্ড এক্সট্রাকশন
+- ম্যানুয়াল এক্স্যাক্ট ম্যাচ ক্যাম্পেইন সেটআপ
+- বাজেট ডিস্ট্রিবিউশন
 
 # ⭐ রিভিউ জেনারেশন প্ল্যান
-- Vine প্রোগ্রাম
-- রিভিউ রিকোয়েস্ট সিকোয়েন্স
-- টার্গেট: ৩০ দিনে ৩০ রিভিউ
+- Vine প্রোগ্রাম এনরোলমেন্ট গাইড
+- কাস্টমার রিভিউ রিকোয়েস্ট অটোমেশন
 
-# 📦 ইনভেন্টরি প্ল্যানিং
-- প্রথম অর্ডার: ৩০০-৫০০ ইউনিট
-- রিঅর্ডার পয়েন্ট
-- সেফটি স্টক
+# 📦 ইনভেন্টরি ও লজিস্টিকস প্ল্যানিং
+- প্রথম অর্ডার ইউনিট পরিমাণ ও শিপিং মেথড (এয়ার বনাম সি)
+- রিঅর্ডার পয়েন্ট গণনা
 
 # 📅 Day 0-90 লঞ্চ টাইমলাইন
-প্রতি সপ্তাহের কাজের তালিকা দিন।
+প্রতি সপ্তাহের নির্দিষ্ট কাজের তালিকা দিন।
 
-# 📱 মার্কেটিং চ্যানেল
-- TikTok, Instagram, Facebook, Pinterest
-- ইনফ্লুয়েন্সার আউটরিচ
-
-প্রতিটি সেকশনে বুলেট পয়েন্ট ও নির্দিষ্ট নাম্বার দিন।`;
+ব্যবসায়িক টার্মগুলোর বাংলা অনুবাদ বন্ধনীতে দিন। টেবিল ও বুলেট পয়েন্ট ব্যবহার করুন।`;
 
       const strategy = await callAIWithFallback([
         { role: "system", content: BANGLA_SYSTEM_PROMPT },
         { role: "user", content: prompt },
       ]);
 
-      const db = getDb();
+      const timelineData = generateLaunchTimeline(hasBattery, isElectronic, isFragile);
+      const pricingData = generatePricingStrategy(input.targetPrice || (product.price ? parseFloat(String(product.price)) : 29.99), input.competitorPrice);
+      const ppcData = generatePPCCampaign(input.category || product.bsrCategory || "General");
+      const reviewData = generateReviewStrategy(reviewCount);
+      const inventoryData = generateInventoryPlan(salesEstimate, isFragile);
+      const marketingData = generateMarketingChannels();
+
       const result = await db
         .insert(launchStrategies)
         .values({
@@ -75,12 +108,12 @@ export const launchRouter = createRouter({
           userId: ctx.user.id,
           title: `${input.productTitle} - লঞ্চ স্ট্র্যাটেজি`,
           content: strategy,
-          timeline: generateLaunchTimeline(),
-          pricingStrategy: generatePricingStrategy(input.targetPrice, input.competitorPrice),
-          ppcCampaign: generatePPCCampaign(),
-          reviewStrategy: generateReviewStrategy(),
-          inventoryPlan: generateInventoryPlan(),
-          marketingChannels: generateMarketingChannels(),
+          timeline: timelineData,
+          pricingStrategy: pricingData,
+          ppcCampaign: ppcData,
+          reviewStrategy: reviewData,
+          inventoryPlan: inventoryData,
+          marketingChannels: marketingData,
         })
         .returning();
 
@@ -102,53 +135,75 @@ export const launchRouter = createRouter({
     }),
 });
 
-function generateLaunchTimeline() {
-  return [
-    { day: "০", task: "প্রোডাক্ট FBA-তে পৌঁছে, লিস্টিং লাইভ" },
-    { day: "১-৭", task: "PPC অটো ক্যাম্পেইন, $৫০/দিন, সার্চ টার্ম মনিটরিং" },
-    { day: "৭", task: "Vine-এ এনরোল, প্রথম রিভিউ রিকোয়েস্ট" },
-    { day: "১৪", task: "অটো ক্যাম্পেইন ডেটা অ্যানালাইসিস, ম্যানুয়াল ক্যাম্পেইন লঞ্চ" },
-    { day: "২১", task: "প্রথম Vine রিভিউ পোস্ট, প্রাইস অ্যাডজাস্টমেন্ট" },
-    { day: "৩০", task: "BSR ট্র্যাজেক্টরি, TACoS, রিভিউ ভেলোসিটি ইভ্যালুয়েশন" },
-    { day: "৪৫", task: "PPC অপ্টিমাইজেশন, প্রোডাক্ট টার্গেটিং ক্যাম্পেইন" },
-    { day: "৬০", task: "উইনার্স vs লুজার্স অ্যানালাইসিস, রিঅর্ডার ডিসিশন" },
-    { day: "৯০", task: "স্কেল উইনিং ক্যাম্পেইন, এক্সপেনশন প্ল্যান" },
+function generateLaunchTimeline(hasBattery: boolean, isElectronic: boolean, isFragile: boolean) {
+  const timeline = [
+    { day: "০", task: "প্রোডাক্ট FBA গুদামে রিসিভ হয়েছে, লিস্টিং লাইভ করা হল।" },
   ];
+
+  if (hasBattery) {
+    timeline.push({ day: "১", task: "MSDS এবং UN38.3 ডকুমেন্ট সাবমিট করে বিপজ্জনক পণ্য (Dangerous Goods) ক্লিয়ারেন্স ভেরিফাই করুন।" });
+  }
+  if (isElectronic) {
+    timeline.push({ day: "১-২", task: "FCC/CE ডিক্লেয়ারেশন কমপ্লায়েন্স সার্টিফিকেশন এবং ওয়ারেন্টি কার্ড আপলোড কনফার্ম করুন।" });
+  }
+  if (isFragile) {
+    timeline.push({ day: "১", task: "FBA গুদামে বাবল র্যাপ এবং প্রটেক্টিভ প্যালেট ট্র্যাকিং ভেরিফাই করুন যাতে ডেলিভারি ট্রানজিটে ড্যামেজ না হয়।" });
+  }
+
+  timeline.push(
+    { day: "১-৭", task: "PPC অটো ক্যাম্পেইন चालू করুন, কিওয়ার্ডের ডেটা ট্র্যাক করার জন্য দৈনিক বাজেট রাখুন।" },
+    { day: "৭", task: "Amazon Vine প্রোগ্রামে প্রোডাক্টটি এনরোল করুন (৩০টি ফ্রি রিভিউ পাওয়ার জন্য)।" },
+    { day: "১৪", task: "কনভার্টিং কীওয়ার্ড ফিল্টার করে ম্যানুয়াল ব্রড ও এক্স্যাক্ট ম্যাচ ক্যাম্পেইন লঞ্চ করুন।" },
+    { day: "২১", task: "প্রথম Vine রিভিউ রিসিভ করার পর প্রাইজ ৫-১০% বাড়িয়ে এডজাস্ট করুন।" },
+    { day: "৩০", task: "কনভার্সন রেট, CVR, এবং TACoS রিভিউ করুন। অতিরিক্ত নেগেটিভ কিওয়ার্ড অ্যাড করুন।" },
+    { day: "৬০", task: "সেলস ভেলোসিটির ওপর ভিত্তি করে ৩য় মাসের শুরুতে পরবর্তী শিপমেন্টের রিঅর্ডার ডিসিশন নিন।" },
+    { day: "৯০", task: "লঞ্চিং ফেজ শেষ। এখন প্রফিটেবল কিওয়ার্ডগুলোতে র্যাঙ্কিং ধরে রাখতে বিড অপ্টিমাইজ করুন।" }
+  );
+
+  return timeline;
 }
 
-function generatePricingStrategy(targetPrice?: number, competitorPrice?: number) {
+function generatePricingStrategy(targetPrice: number, competitorPrice?: number) {
   const marketAvg = competitorPrice || targetPrice || 29.99;
   return {
-    phase1: { days: "১-১৪", price: (marketAvg * 0.88).toFixed(2), strategy: "পেনেট্রেশন প্রাইসিং (১২% কম)" },
-    phase2: { days: "১৫-৪৫", price: marketAvg.toFixed(2), strategy: "কম্পিটিটিভ প্রাইসিং" },
-    phase3: { days: "৪৬+", price: (marketAvg * 1.1).toFixed(2), strategy: "প্রিমিয়াম প্রাইসিং (১০% বেশি)" },
+    phase1: { days: "১-১৪", price: (marketAvg * 0.85).toFixed(2), strategy: "পেনেট্রেশন প্রাইসিং (১৫% ডিসকাউন্ট দিয়ে র্যাঙ্কিং বুস্ট)" },
+    phase2: { days: "১৫-৪৫", price: marketAvg.toFixed(2), strategy: "কম্পিটিটিভ মার্কেট প্রাইজ" },
+    phase3: { days: "৪৬+", price: (marketAvg * 1.08).toFixed(2), strategy: "প্রিমিয়াম ব্র্যান্ডেড প্রাইসিং (রিভিউ জমার পর মার্জিন বৃদ্ধির জন্য)" },
   };
 }
 
-function generatePPCCampaign() {
+function generatePPCCampaign(category: string) {
+  const isCompetitive = /electronic|kitchen|beauty|home/i.test(category);
+  const autoBudget = isCompetitive ? 60 : 35;
+  const manualBudget = isCompetitive ? 80 : 45;
+  const total = autoBudget + manualBudget + 25;
+
   return {
-    autoCampaign: { budget: 50, duration: "Week 1-2", goal: "কনভার্টিং কীওয়ার্ড খুঁজুন" },
-    manualExact: { budget: 75, duration: "Week 3+", goal: "প্রুভেন কীওয়ার্ডে বিড" },
-    productTargeting: { budget: 25, duration: "Week 4+", goal: "কম্পিটিটর ASIN আট্যাক" },
-    totalDailyBudget: 150,
-    targetAcos: "২৫% (লঞ্চ), ২০% (ম্যাচিউর)",
+    autoCampaign: { budget: autoBudget, duration: "সপ্তাহ ১-২", goal: "কনভার্টিং লং-টেইল কীওয়ার্ড এক্সট্রাকশন" },
+    manualExact: { budget: manualBudget, duration: "সপ্তাহ ৩+", goal: "হাই কনভার্টিং প্রুভেন সার্চ টার্ম র্যাঙ্কিং" },
+    productTargeting: { budget: 25, duration: "সপ্তাহ ৪+", goal: "দুর্বল রেটিংযুক্ত প্রতিযোগী ASIN টার্গেটিং" },
+    totalDailyBudget: total,
+    targetAcos: isCompetitive ? "৩০% (লঞ্চ ফেজ)" : "২৫% (লঞ্চ ফেজ)",
   };
 }
 
-function generateReviewStrategy() {
+function generateReviewStrategy(currentReviews: number) {
   return {
-    vineProgram: { units: 30, expectedReviews: 30, cost: "ফ্রি (Amazon Vine)" },
-    requestReview: { method: "Amazon 'Request a Review' বাটন", timing: "ডেলিভারির ৫-৭ দিন পর" },
-    followUp: { method: "কমপ্লায়েন্ট ইমেইল সিকোয়েন্স", count: 2 },
-    target: "১৪ দিনে ১০ রিভিউ, ৩০ দিনে ৩০ রিভিউ",
+    vineProgram: { units: 30, expectedReviews: 25, cost: "ফ্রি লাইসেন্স ফি" },
+    requestReview: { method: "সিস্টেম জেনারেটেড 'Request a Review' অটোমেশন", timing: "ডেলিভারির ৫ দিন পর" },
+    followUp: { method: "Amazon কমপ্লায়েন্ট কাস্টমার সাপোর্ট ফলোআপ", count: 1 },
+    target: currentReviews > 10 ? "৩০ দিনে আরও ২৫টি ভেরিফাইড রিভিউ যোগ করা" : "১৪ দিনে ১০টি এবং ৩০ দিনে ৩০টি ভেরিফাইড রিভিউ",
   };
 }
 
-function generateInventoryPlan() {
+function generateInventoryPlan(salesEstimate: number, isFragile: boolean) {
+  const safetyStock = Math.ceil(salesEstimate * 0.5); // 15 days safety
+  const initialOrder = Math.max(300, Math.ceil(salesEstimate * 1.5)); // 1.5 months sales
+
   return {
-    initialOrder: { units: "৩০০-৫০০", type: "টেস্ট অর্ডার" },
-    reorderPoint: "৪৫ দিনের ইনভেন্টরি রেখে",
-    reorderFormula: "(দৈনিক বিক্রি × ৪৫) + (দৈনিক বিক্রি × ৩০ সেফটি)",
+    initialOrder: { units: initialOrder.toString(), type: isFragile ? "সি শিপমেন্ট (বাবল র্যাপ প্রটেকশনসহ)" : "এয়ার শিপমেন্ট (টেস্ট প্যাকেট)" },
+    reorderPoint: `গুদামে ${safetyStock} ইউনিট অবশিষ্ঠ থাকতে`,
+    reorderFormula: `(দৈনিক সেলস × ৪৫ দিন লিড টাইম) + ${safetyStock} সেফটি স্টক`,
     avoidQ4Overstock: true,
     avoidStockout: true,
   };
@@ -156,10 +211,9 @@ function generateInventoryPlan() {
 
 function generateMarketingChannels() {
   return [
-    { channel: "TikTok", strategy: "প্রোডাক্ট ডেমো ভিডিও, বিফোর/আফটার কন্টেন্ট" },
-    { channel: "Instagram", strategy: "লাইফস্টাইল ফটো, ইনফ্লুয়েন্সার সিডিং" },
-    { channel: "Facebook", strategy: "Amazon লিস্টিং-এ রিটার্গেটিং অ্যাড" },
-    { channel: "Pinterest", strategy: "ইনফোগ্রাফিক পিন (হাই ইন্টেন্ট ট্র্যাফিক)" },
-    { channel: "YouTube", strategy: "মাইক্রো-ইনফ্লুয়েন্সার আউটরিচ" },
+    { channel: "TikTok / Reels", strategy: "Proaduct-এর প্রবলেম সলভিং ১-মিনিট ডেমো ভিডিও এবং ইনফ্লুয়েন্সার আউটরিচ।" },
+    { channel: "Instagram", strategy: "উচ্চমানের লাইফস্টাইল ইমেজেস এবং গিভঅ্যাওয়ে ক্যাম্পেইন।" },
+    { channel: "Amazon Post", strategy: "ফ্রি লাইভ ইমেজ ও গ্রাফিক্স আপলোড করে লিস্টিং ট্র্যাফিক বৃদ্ধি।" },
+    { channel: "Pinterest", strategy: "হাই-কনভার্সন রিচ ডেকোরেশন পিন আপলোড।" },
   ];
 }
