@@ -2,11 +2,13 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { env } from "./lib/env";
 import { getDb } from "./queries/connection";
-import { researchJobs, reports, products, productScores, alerts, productSnapshots } from "@db/schema";
+import { researchJobs, reports, products, productScores, alerts, productSnapshots, keywordSearches, keywordSearchListings } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { callAIWithFallback, buildGroundedSystemPrompt } from "./lib/ai";
 import { TRPCError } from "@trpc/server";
-import { scoreProduct, extractSpecsFromReport } from "./lib/scoring";
+import { scoreProduct, extractSpecsFromReport, ProductInput } from "./lib/scoring";
+import { fetchListingsForKeyword } from "./lib/amazon-paapi";
+import { assessMarket, scoreListing, mapToKeywordSearchListing } from "./lib/listing-analysis";
 import { appRouter } from "./router";
 
 /**
@@ -23,18 +25,129 @@ const requireCronSecret = async (c: any, next: any) => {
   if (!env.cronSecret || secret !== env.cronSecret) {
     return c.json({ error: "Unauthorized — invalid or missing x-cron-secret" }, 401);
   }
-  await next();
-};
+  } catch (err: any) {
+    return c.json({ ok: false, error: err.message }, 500);
+  }
+});
 
-cronApp.use("/*", requireCronSecret);
-
-// ── 1. Process Pending Research Jobs ──────────────────────────────
+// ── 2. Process Pending Keyword Search Jobs ────────────────────────────
 // Called every 5 minutes by cron-jobs.org.
 // This bypasses Vercel's 8s function timeout because:
 // - The cron job has 300s maxDuration in vercel.json
 // - The request comes from outside Vercel's HTTP gateway
 
-cronApp.post("/process-research", async (c) => {
+cronApp.post("/process-keyword-search", async (c) => {
+  const db = getDb();
+
+  // Pick one pending keyword search (FIFO)
+  const pending = await db
+    .select()
+    .from(keywordSearches)
+    .where(eq(keywordSearches.status, "pending"))
+    .orderBy(keywordSearches.createdAt)
+    .limit(1);
+
+  if (pending.length === 0) {
+    return c.json({ ok: true, processed: 0, message: "No pending keyword searches" });
+  }
+
+  const search = pending[0];
+
+  // Mark as running
+  await db
+    .update(keywordSearches)
+    .set({ status: "running", startedAt: new Date() })
+    .where(eq(keywordSearches.id, search.id));
+
+  try {
+    // Fetch listings from Amazon PA-API
+    const { keyword, marketplace } = search;
+    const result = await fetchListingsForKeyword(keyword, marketplace);
+
+    // Insert listings into database
+    const listingsToInsert = result.items.map((item, index) => 
+      mapToKeywordSearchListing(item, search.id, index + 1, 50, "vulnerable")
+    );
+
+    await db.insert(keywordSearchListings).values(listingsToInsert);
+
+    // Calculate market assessment
+    const marketAssessment = assessMarket(result.items, result.totalResultCount);
+
+    // Score each listing
+    const scoredListings = result.items.map((item, index) => {
+      const scoreResult = scoreListing(item, {
+        medianReviews: marketAssessment.avgReviewCount,
+        medianPrice: marketAssessment.avgPrice,
+        topBrand: "", // Will be calculated in assessMarket
+      });
+      return mapToKeywordSearchListing(item, search.id, index + 1, scoreResult.score, scoreResult.verdict);
+    });
+
+    // Update listings with scores
+    for (const listing of scoredListings) {
+      await db
+        .update(keywordSearchListings)
+        .set({
+          perListingScore: listing.perListingScore,
+          perListingVerdict: listing.perListingVerdict,
+        })
+        .where(eq(keywordSearchListings.id, listing.id));
+    }
+
+    // Generate AI summary report using grounded prompt
+    const systemPrompt = await buildGroundedSystemPrompt(marketplace);
+    
+    const userPrompt = `## কীওয়ার্ড: "${keyword}"
+## মার্কেটপ্লেস: ${marketplace}
+## মোট ফলাফল: ${result.totalResultCount}
+
+### মার্কেট ওভারভিউ:
+- গড় প্রাইস: $${marketAssessment.avgPrice.toFixed(2)}
+- গড় রিভিউ: ${marketAssessment.avgReviewCount.toFixed(0)}
+- ব্র্যান্ড কনসেন্ট্রেশন: ${(marketAssessment.topBrandShare * 100).toFixed(1)}%
+- প্রাইস স্প্রেড: ${(marketAssessment.priceSpreadRatio * 100).toFixed(1)}%
+- রিভিউ গ্যাপ: ${(marketAssessment.reviewCountGiniLike * 100).toFixed(1)}%
+
+### মার্কেট ভারডিক্ট: ${marketAssessment.marketVerdict}
+### কারণ: ${marketAssessment.marketVerdictReason}
+
+### সেরা সুযোগ: ${marketAssessment.bestOpportunityAsin || "কোনোটিই নয়"}
+
+---
+
+এই মার্কেট সম্পর্কে একজন নতুন ব্যবসায়ীর জন্য বিস্তারিত বিশ্লেষণ এবং সুপারিশ তৈরি করুন।`;
+
+    const aiResult = await callAIWithFallback([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ]);
+
+    // Update search with results
+    await db
+      .update(keywordSearches)
+      .set({
+        status: "completed",
+        totalResultCount: result.totalResultCount,
+        aggregateScores: marketAssessment as any,
+        summaryReport: aiResult,
+        completedAt: new Date(),
+      })
+      .where(eq(keywordSearches.id, search.id));
+
+    return c.json({ ok: true, processed: 1, searchId: search.id, totalListings: result.items.length });
+  } catch (err: any) {
+    // Mark search as failed
+    await db
+      .update(keywordSearches)
+      .set({ status: "failed", error: err.message })
+      .where(eq(keywordSearches.id, search.id));
+
+    return c.json({ ok: false, processed: 0, searchId: search.id, error: err.message }, 500);
+  }
+});
+
+// ── 3. Check Product Alerts ──────────────────────────────────────
   const db = getDb();
 
   // Pick one pending job (FIFO)
@@ -296,7 +409,7 @@ BSR: ${manualData.bsr}
     ]);
 
     // Generate 13-point scores from the generated report
-    const specs = isManual ? {
+    const specs: ProductInput = isManual ? {
       price: Number(manualData.price),
       weight: Number(manualData.weight || 1),
       bsr: Number(manualData.bsr),
@@ -306,6 +419,8 @@ BSR: ${manualData.bsr}
       hasBattery: !!manualData.hasBattery,
       isElectronic: !!manualData.isElectronic,
       isFragile: !!manualData.isFragile,
+      rating: manualData.rating ? Number(manualData.rating) : undefined,
+      salesEstimate: undefined,
     } : extractSpecsFromReport(result);
 
     const { scores, totalScore, grade, recommendation } = await scoreProduct(specs);
@@ -319,11 +434,13 @@ BSR: ${manualData.bsr}
           userId: job.userId || null,
           asin: isManual ? manualData.asin : ("RESEARCH-" + job.id),
           title: isManual ? manualData.title : job.input,
-          price: isManual ? String(manualData.price) : null,
-          bsr: isManual ? manualData.bsr : null,
-          reviewCount: isManual ? manualData.reviewCount : null,
-          rating: isManual ? String(manualData.rating) : null,
-          sellerCount: isManual ? manualData.sellerCount : null,
+          price: isManual ? String(manualData.price) : (specs.price ? String(specs.price) : null),
+          bsr: isManual ? manualData.bsr : (specs.bsr || null),
+          reviewCount: isManual ? manualData.reviewCount : (specs.reviewCount || null),
+          rating: isManual ? String(manualData.rating) : (specs.rating ? String(specs.rating) : null),
+          sellerCount: isManual ? manualData.sellerCount : (specs.sellerCount || null),
+          salesEstimate: isManual ? null : (specs.salesEstimate || null),
+          bsrCategory: isManual ? manualData.category : (specs.category || null),
           marketplace: job.marketplace || "US",
           status: "researching",
         })

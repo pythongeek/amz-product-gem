@@ -7,6 +7,7 @@ import { launchRouter } from "./launch-router";
 import { dashboardRouter } from "./dashboard-router";
 import { alertRouter } from "./alert-router";
 import { jobRouter } from "./jobRouter";
+import { keywordResearchRouter } from "./keyword-research-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -20,6 +21,7 @@ export const appRouter = createRouter({
   alert: alertRouter,
   admin: adminAuthRouter,
   job: jobRouter,
+  keywordResearch: keywordResearchRouter,
 });
 
 export type AppRouter = typeof appRouter;
