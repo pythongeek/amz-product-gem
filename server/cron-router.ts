@@ -151,3 +151,5 @@ cronApp.post("/process-keyword-search", async (c) => {
     return c.json({ ok: false, processed: 0, searchId: search.id, error: err.message }, 500);
   }
 });
+
+export default cronApp;
