@@ -21,13 +21,15 @@ const cronApp = new Hono();
 
 // Middleware: verify cron secret
 const requireCronSecret = async (c: any, next: any) => {
-  const secret = c.req.header("x-cron-secret");
-  if (!env.cronSecret || secret !== env.cronSecret) {
-    return c.json({ error: "Unauthorized — invalid or missing x-cron-secret" }, 401);
+  try {
+    const secret = c.req.header("x-cron-secret");
+    if (!env.cronSecret || secret !== env.cronSecret) {
+      return c.json({ error: "Unauthorized — invalid or missing x-cron-secret" }, 401);
+    }
+    await next();
+  } catch (err: any) {
+    return c.json({ ok: false, error: err.message }, 500);
   }
-  await next();
-} catch (err: any) {
-  return c.json({ ok: false, error: err.message }, 500);
 };
 
 // Apply middleware to all cron routes
