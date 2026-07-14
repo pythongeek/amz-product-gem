@@ -27,6 +27,7 @@ import {
   Info,
   Database,
 } from "lucide-react";
+import KeywordResearchForm from "@/components/KeywordResearchForm";
 
 const marketplaces = [
   { value: "US", label: "🇺🇸 যুক্তরাষ্ট্র (US)", currency: "USD" },
@@ -142,7 +143,7 @@ export default function Research() {
   const [isFragile, setIsFragile] = useState(false);
 
   const handleResearch = async (isManualMode = false) => {
-    const searchTerm = isManualMode ? manualTitle : (url || keyword);
+    const searchTerm = isManualMode ? manualTitle : url || keyword;
     if (!searchTerm.trim()) return;
 
     setIsAnalyzing(true);
@@ -205,300 +206,319 @@ export default function Research() {
         {/* Main Input Card with Tabs */}
         <Card className="border-0 shadow-xl shadow-slate-200/50 dark:shadow-slate-800/50 bg-white dark:bg-slate-800 overflow-hidden">
           <CardContent className="p-8">
-            <Tabs defaultValue="auto" className="w-full">
+            <Tabs defaultValue="single" className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-8 bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl">
-                <TabsTrigger value="auto" className="rounded-lg py-3 text-sm font-semibold">
-                  🔍 স্বয়ংক্রিয় AI রিসার্চ
+                <TabsTrigger value="single" className="rounded-lg py-3 text-sm font-semibold">
+                  🔍 সিঙ্গেল প্রোডাক্ট রিসার্চ
                 </TabsTrigger>
-                <TabsTrigger value="manual" className="rounded-lg py-3 text-sm font-semibold">
-                  ✍️ ম্যানুয়াল প্রোডাক্ট এন্ট্রি (উন্নত)
+                <TabsTrigger value="keyword" className="rounded-lg py-3 text-sm font-semibold">
+                  🔍 কীওয়ার্ড/লিস্টিং বিশ্লেষণ
                 </TabsTrigger>
               </TabsList>
 
-              {/* Automatic Search */}
-              <TabsContent value="auto" className="space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-base font-medium text-slate-700 dark:text-slate-200 mb-2 block">
-                      Amazon প্রোডাক্ট URL
-                    </Label>
-                    <div className="relative">
-                      <Globe className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                      <Input
-                        placeholder="https://amazon.com/dp/B08N5WRWNW"
-                        value={url}
-                        onChange={(e) => {
-                          setUrl(e.target.value);
-                          if (e.target.value) setKeyword("");
-                        }}
-                        className="pl-12 h-14 text-base rounded-xl border-slate-300 dark:border-slate-600 focus-visible:ring-blue-500"
-                      />
+              {/* Single Product Research */}
+              <TabsContent value="single">
+                <Tabs defaultValue="auto" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 mb-8 bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl">
+                    <TabsTrigger value="auto" className="rounded-lg py-3 text-sm font-semibold">
+                      🔍 স্বয়ংক্রিয় AI রিসার্চ
+                    </TabsTrigger>
+                    <TabsTrigger value="manual" className="rounded-lg py-3 text-sm font-semibold">
+                      ✍️ ম্যানুয়াল প্রোডাক্ট এন্ট্রি (উন্নত)
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {/* Automatic Search */}
+                  <TabsContent value="auto" className="space-y-6">
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-base font-medium text-slate-700 dark:text-slate-200 mb-2 block">
+                          Amazon প্রোডাক্ট URL
+                        </Label>
+                        <div className="relative">
+                          <Globe className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                          <Input
+                            placeholder="https://amazon.com/dp/B08N5WRWNW"
+                            value={url}
+                            onChange={(e) => {
+                              setUrl(e.target.value);
+                              if (e.target.value) setKeyword("");
+                            }}
+                            className="pl-12 h-14 text-base rounded-xl border-slate-300 dark:border-slate-600 focus-visible:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t border-slate-200 dark:border-slate-700" />
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                          <span className="bg-white dark:bg-slate-800 px-4 text-slate-400">
+                            অথবা
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label className="text-base font-medium text-slate-700 dark:text-slate-200 mb-2 block">
+                          কীওয়ার্ড দিয়ে সার্চ
+                        </Label>
+                        <div className="relative">
+                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                          <Input
+                            placeholder="যেমন: yoga block, kitchen organizer..."
+                            value={keyword}
+                            onChange={(e) => {
+                              setKeyword(e.target.value);
+                              if (e.target.value) setUrl("");
+                            }}
+                            className="pl-12 h-14 text-base rounded-xl border-slate-300 dark:border-slate-600 focus-visible:ring-blue-500"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t border-slate-200 dark:border-slate-700" />
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2 block">
+                          মার্কেটপ্লেস
+                        </Label>
+                        <Select value={marketplace} onValueChange={setMarketplace}>
+                          <SelectTrigger className="rounded-xl h-12">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {marketplaces.map((m) => (
+                              <SelectItem key={m.value} value={m.value}>
+                                {m.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2 block">
+                          অভিজ্ঞতার লেভেল
+                        </Label>
+                        <Select value={experience} onValueChange={setExperience}>
+                          <SelectTrigger className="rounded-xl h-12">
+                            <SelectValue placeholder="নির্বাচন করুন" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {experienceLevels.map((e) => (
+                              <SelectItem key={e.value} value={e.value}>
+                                {e.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="bg-white dark:bg-slate-800 px-4 text-slate-400">
-                        অথবা
-                      </span>
+
+                    <div>
+                      <Label className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2 block">
+                        বাজেট রেঞ্জ
+                      </Label>
+                      <Select value={budget} onValueChange={setBudget}>
+                        <SelectTrigger className="rounded-xl h-12">
+                          <SelectValue placeholder="বাজেট নির্বাচন করুন" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {budgetRanges.map((b) => (
+                            <SelectItem key={b.value} value={b.value}>
+                              {b.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </div>
 
-                  <div>
-                    <Label className="text-base font-medium text-slate-700 dark:text-slate-200 mb-2 block">
-                      কীওয়ার্ড দিয়ে সার্চ
-                    </Label>
-                    <div className="relative">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                      <Input
-                        placeholder="যেমন: yoga block, kitchen organizer..."
-                        value={keyword}
-                        onChange={(e) => {
-                          setKeyword(e.target.value);
-                          if (e.target.value) setUrl("");
-                        }}
-                        className="pl-12 h-14 text-base rounded-xl border-slate-300 dark:border-slate-600 focus-visible:ring-blue-500"
-                      />
+                    <Button
+                      onClick={() => handleResearch(false)}
+                      disabled={isAnalyzing || (!url && !keyword)}
+                      className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-xl shadow-lg shadow-blue-500/25 transition-all"
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                          AI বিশ্লেষণ চলছে...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-5 w-5 mr-2" />
+                          AI দিয়ে রিসার্চ করুন
+                        </>
+                      )}
+                    </Button>
+                  </TabsContent>
+
+                  {/* Manual Entry */}
+                  <TabsContent value="manual" className="space-y-6">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="mb-2 block">প্রোডাক্ট নাম</Label>
+                        <Input
+                          placeholder="যেমন: Ergonomic Memory Foam Pillow"
+                          value={manualTitle}
+                          onChange={(e) => setManualTitle(e.target.value)}
+                          className="h-12 rounded-xl"
+                        />
+                      </div>
+                      <div>
+                        <Label className="mb-2 block">ASIN</Label>
+                        <Input
+                          placeholder="যেমন: B08N5WRWNW"
+                          value={manualAsin}
+                          onChange={(e) => setManualAsin(e.target.value)}
+                          className="h-12 rounded-xl"
+                        />
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2 block">
-                      মার্কেটপ্লেস
-                    </Label>
-                    <Select value={marketplace} onValueChange={setMarketplace}>
-                      <SelectTrigger className="rounded-xl h-12">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {marketplaces.map((m) => (
-                          <SelectItem key={m.value} value={m.value}>
-                            {m.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      <div>
+                        <Label className="mb-2 block">সেলিং প্রাইজ ($)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={manualPrice}
+                          onChange={(e) => setManualPrice(e.target.value)}
+                          className="h-12 rounded-xl"
+                        />
+                      </div>
+                      <div>
+                        <Label className="mb-2 block">ওজন (lbs)</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          value={manualWeight}
+                          onChange={(e) => setManualWeight(e.target.value)}
+                          className="h-12 rounded-xl"
+                        />
+                      </div>
+                      <div>
+                        <Label className="mb-2 block">BSR (Best Sellers Rank)</Label>
+                        <Input
+                          type="number"
+                          value={manualBsr}
+                          onChange={(e) => setManualBsr(e.target.value)}
+                          className="h-12 rounded-xl"
+                        />
+                      </div>
+                      <div>
+                        <Label className="mb-2 block">রিভিউ সংখ্যা</Label>
+                        <Input
+                          type="number"
+                          value={manualReviews}
+                          onChange={(e) => setManualReviews(e.target.value)}
+                          className="h-12 rounded-xl"
+                        />
+                      </div>
+                      <div>
+                        <Label className="mb-2 block">অ্যাভারেজ রেটিং</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          value={manualRating}
+                          onChange={(e) => setManualRating(e.target.value)}
+                          className="h-12 rounded-xl"
+                        />
+                      </div>
+                      <div>
+                        <Label className="mb-2 block">সেলার সংখ্যা</Label>
+                        <Input
+                          type="number"
+                          value={manualSellers}
+                          onChange={(e) => setManualSellers(e.target.value)}
+                          className="h-12 rounded-xl"
+                        />
+                      </div>
+                    </div>
 
-                  <div>
-                    <Label className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2 block">
-                      অভিজ্ঞতার লেভেল
-                    </Label>
-                    <Select value={experience} onValueChange={setExperience}>
-                      <SelectTrigger className="rounded-xl h-12">
-                        <SelectValue placeholder="নির্বাচন করুন" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {experienceLevels.map((e) => (
-                          <SelectItem key={e.value} value={e.value}>
-                            {e.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="mb-2 block">ক্যাটাগরি</Label>
+                        <Select value={manualCategory} onValueChange={setManualCategory}>
+                          <SelectTrigger className="rounded-xl h-12">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map((c) => (
+                              <SelectItem key={c.value} value={c.value}>
+                                {c.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="mb-2 block">মার্কেটপ্লেস</Label>
+                        <Select value={marketplace} onValueChange={setMarketplace}>
+                          <SelectTrigger className="rounded-xl h-12">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {marketplaces.map((m) => (
+                              <SelectItem key={m.value} value={m.value}>
+                                {m.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
 
-                <div>
-                  <Label className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2 block">
-                    বাজেট রেঞ্জ
-                  </Label>
-                  <Select value={budget} onValueChange={setBudget}>
-                    <SelectTrigger className="rounded-xl h-12">
-                      <SelectValue placeholder="বাজেট নির্বাচন করুন" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {budgetRanges.map((b) => (
-                        <SelectItem key={b.value} value={b.value}>
-                          {b.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    {/* Switch style Checkboxes */}
+                    <div className="flex flex-wrap gap-6 p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox id="battery" checked={hasBattery} onCheckedChange={(c) => setHasBattery(!!c)} />
+                        <Label htmlFor="battery" className="cursor-pointer">ব্যাটারি আছে (Battery Included)</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox id="electronic" checked={isElectronic} onCheckedChange={(c) => setIsElectronic(!!c)} />
+                        <Label htmlFor="electronic" className="cursor-pointer">ইলেকট্রনিক ডিভাইস (Electronic)</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox id="fragile" checked={isFragile} onCheckedChange={(c) => setIsFragile(!!c)} />
+                        <Label htmlFor="fragile" className="cursor-pointer">কাঁচ বা ভঙ্গুর (Fragile / Glass)</Label>
+                      </div>
+                    </div>
 
-                <Button
-                  onClick={() => handleResearch(false)}
-                  disabled={isAnalyzing || (!url && !keyword)}
-                  className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-xl shadow-lg shadow-blue-500/25 transition-all"
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                      AI বিশ্লেষণ চলছে...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-5 w-5 mr-2" />
-                      AI দিয়ে রিসার্চ করুন
-                    </>
-                  )}
-                </Button>
+                    {/* Keepa Helper Text Alert */}
+                    <div className="flex gap-3 p-4 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900 text-sm text-blue-700 dark:text-blue-300">
+                      <Info className="h-5 w-5 flex-shrink-0" />
+                      <div>
+                        <span className="font-semibold block mb-0.5">💡 Keepa এক্সটেনশন টিপস</span>
+                        আপনি যদি ক্রোম বা ফায়ারফক্স ব্রাউজারে ফ্রি <b>Keepa Extension</b> ব্যবহার করেন, তবে সেখান থেকে সরাসরি প্রোডাক্টের BSR, প্রাইস, ও রিভিউর সঠিক হিসাব এখানে বসাতে পারেন।
+                      </div>
+                    </div>
+
+                    <Button
+                      onClick={() => handleResearch(true)}
+                      disabled={isAnalyzing || !manualTitle || !manualAsin}
+                      className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-xl shadow-lg shadow-blue-500/25 transition-all"
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                          ম্যানুয়াল ভ্যালিডেশন চলছে...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-5 w-5 mr-2" />
+                          ডাটা সাবমিট ও স্কোর বের করুন
+                        </>
+                      )}
+                    </Button>
+                  </TabsContent>
+                </Tabs>
               </TabsContent>
 
-              {/* Manual Entry */}
-              <TabsContent value="manual" className="space-y-6">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label className="mb-2 block">প্রোডাক্ট নাম</Label>
-                    <Input
-                      placeholder="যেমন: Ergonomic Memory Foam Pillow"
-                      value={manualTitle}
-                      onChange={(e) => setManualTitle(e.target.value)}
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                  <div>
-                    <Label className="mb-2 block">ASIN</Label>
-                    <Input
-                      placeholder="যেমন: B08N5WRWNW"
-                      value={manualAsin}
-                      onChange={(e) => setManualAsin(e.target.value)}
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  <div>
-                    <Label className="mb-2 block">সেলিং প্রাইজ ($)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={manualPrice}
-                      onChange={(e) => setManualPrice(e.target.value)}
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                  <div>
-                    <Label className="mb-2 block">ওজন (lbs)</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={manualWeight}
-                      onChange={(e) => setManualWeight(e.target.value)}
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                  <div>
-                    <Label className="mb-2 block">BSR (Best Sellers Rank)</Label>
-                    <Input
-                      type="number"
-                      value={manualBsr}
-                      onChange={(e) => setManualBsr(e.target.value)}
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                  <div>
-                    <Label className="mb-2 block">রিভিউ সংখ্যা</Label>
-                    <Input
-                      type="number"
-                      value={manualReviews}
-                      onChange={(e) => setManualReviews(e.target.value)}
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                  <div>
-                    <Label className="mb-2 block">অ্যাভারেজ রেটিং</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={manualRating}
-                      onChange={(e) => setManualRating(e.target.value)}
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                  <div>
-                    <Label className="mb-2 block">সেলার সংখ্যা</Label>
-                    <Input
-                      type="number"
-                      value={manualSellers}
-                      onChange={(e) => setManualSellers(e.target.value)}
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label className="mb-2 block">ক্যাটাগরি</Label>
-                    <Select value={manualCategory} onValueChange={setManualCategory}>
-                      <SelectTrigger className="rounded-xl h-12">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((c) => (
-                          <SelectItem key={c.value} value={c.value}>
-                            {c.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="mb-2 block">মার্কেটপ্লেস</Label>
-                    <Select value={marketplace} onValueChange={setMarketplace}>
-                      <SelectTrigger className="rounded-xl h-12">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {marketplaces.map((m) => (
-                          <SelectItem key={m.value} value={m.value}>
-                            {m.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Switch style Checkboxes */}
-                <div className="flex flex-wrap gap-6 p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox id="battery" checked={hasBattery} onCheckedChange={(c) => setHasBattery(!!c)} />
-                    <Label htmlFor="battery" className="cursor-pointer">ব্যাটারি আছে (Battery Included)</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox id="electronic" checked={isElectronic} onCheckedChange={(c) => setIsElectronic(!!c)} />
-                    <Label htmlFor="electronic" className="cursor-pointer">ইলেকট্রনিক ডিভাইস (Electronic)</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox id="fragile" checked={isFragile} onCheckedChange={(c) => setIsFragile(!!c)} />
-                    <Label htmlFor="fragile" className="cursor-pointer">কাঁচ বা ভঙ্গুর (Fragile / Glass)</Label>
-                  </div>
-                </div>
-
-                {/* Keepa Helper Text Alert */}
-                <div className="flex gap-3 p-4 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900 text-sm text-blue-700 dark:text-blue-300">
-                  <Info className="h-5 w-5 flex-shrink-0" />
-                  <div>
-                    <span className="font-semibold block mb-0.5">💡 Keepa এক্সটেনশন টিপস</span>
-                    আপনি যদি ক্রোম বা ফায়ারফক্স ব্রাউজারে ফ্রি <b>Keepa Extension</b> ব্যবহার করেন, তবে সেখান থেকে সরাসরি প্রোডাক্টের BSR, প্রাইস, ও রিভিউর সঠিক হিসাব এখানে বসাতে পারেন।
-                  </div>
-                </div>
-
-                <Button
-                  onClick={() => handleResearch(true)}
-                  disabled={isAnalyzing || !manualTitle || !manualAsin}
-                  className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-xl shadow-lg shadow-blue-500/25 transition-all"
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                      ম্যানুয়াল ভ্যালিডেশন চলছে...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-5 w-5 mr-2" />
-                      ডাটা সাবমিট ও স্কোর বের করুন
-                    </>
-                  )}
-                </Button>
+              {/* Keyword Research */}
+              <TabsContent value="keyword">
+                <KeywordResearchForm />
               </TabsContent>
             </Tabs>
           </CardContent>
@@ -614,7 +634,7 @@ export default function Research() {
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
                         isCompleted 
                           ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" 
-                          : isCurrent 
+                          : isCurrent
                             ? "bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 animate-pulse" 
                             : "bg-slate-100 dark:bg-slate-800 text-slate-400"
                       }`}>

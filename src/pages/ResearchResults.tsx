@@ -12,6 +12,7 @@ import {
   ArrowLeft, Save, FileText, TrendingUp, CheckCircle, Loader2, Sparkles,
   BarChart3, DollarSign, Clock, AlertTriangle, XCircle, Zap, Shield, Info
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Tooltip,
   TooltipContent,
@@ -31,7 +32,9 @@ export default function ResearchResults() {
   const [jobStatus, setJobStatus] = useState<any>(null);
   const [pollError, setPollError] = useState("");
 
-  const saveMutation = trpc.product.create.useMutation();
+  const [isSaved, setIsSaved] = useState(false);
+
+  const updateMutation = trpc.product.update.useMutation();
   const reportMutation = trpc.analysis.generateReport.useMutation();
   const getJobStatus = trpc.job.getJobStatus.useQuery(
     { jobId: result?.jobId },
@@ -69,17 +72,20 @@ export default function ResearchResults() {
   const isFailed = jobStatus?.status === "failed" || pollError;
 
   const handleSaveProduct = async () => {
-    if (!isCompleted) return;
+    if (!isCompleted || !jobStatus?.productId) {
+      toast.error("রিসার্চ এখনো সম্পূর্ণ হয়নি বা প্রোডাক্ট আইডি পাওয়া যায়নি।");
+      return;
+    }
     setIsSaving(true);
     try {
-      await saveMutation.mutateAsync({
-        asin: searchConfig?.asin || `KW-${Date.now()}`,
-        title: searchConfig?.keyword || "Research Product",
-        marketplace: searchConfig?.marketplace || "US",
+      await updateMutation.mutateAsync({
+        id: jobStatus.productId,
+        data: { status: "hot_opportunity" },
       });
-      alert("প্রোডাক্ট সেভ হয়েছে! ✅");
-    } catch (error) {
-      console.error(error);
+      setIsSaved(true);
+      toast.success("প্রোডাক্টটি হট অপরচুনিটি হিসেবে সেভ করা হয়েছে! ✅");
+    } catch (error: any) {
+      toast.error(`সেভ ব্যর্থ হয়েছে: ${error.message || "Unknown error"}`);
     } finally {
       setIsSaving(false);
     }
@@ -214,15 +220,24 @@ export default function ResearchResults() {
               </p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={handleSaveProduct} disabled={isSaving || !isCompleted} className="rounded-xl">
+          <div className="flex gap-3 flex-wrap">
+            <Button variant="outline" onClick={handleSaveProduct} disabled={isSaving || !isCompleted || isSaved} className="rounded-xl">
               {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-              সেভ করুন
+              {isSaved ? "সেভ করা হয়েছে" : "সেভ করুন"}
             </Button>
             <Button onClick={handleGenerateReport} disabled={isGeneratingReport || !isCompleted} className="rounded-xl bg-gradient-to-r from-blue-600 to-purple-600">
               {isGeneratingReport ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
               {report ? "রিপোর্ট রিফ্রেশ" : "রিপোর্ট জেনারেট"}
             </Button>
+            {isCompleted && jobStatus?.productId && (
+              <Button
+                onClick={() => navigate(`/launch/${jobStatus.productId}`)}
+                className="rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 flex items-center gap-1.5 font-semibold text-white shadow-md hover:shadow-lg transition-all"
+              >
+                <Zap className="h-4 w-4" />
+                লঞ্চ স্ট্র্যাটেজি
+              </Button>
+            )}
           </div>
         </div>
 

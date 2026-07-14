@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { fbaCalculations, kbFeeRates } from "@db/schema";
-import { eq } from "drizzle-orm";
+import { fbaCalculations, kbFeeRates, products } from "@db/schema";
+import { eq, and } from "drizzle-orm";
 import { matchFeeRate } from "./queries/knowledge-base";
 
 async function calculateFbaFees(
@@ -87,7 +87,7 @@ export const fbaRouter = createRouter({
         marketplace: z.string().default("US"),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const {
         sellingPrice,
         productCost,
@@ -100,6 +100,35 @@ export const fbaRouter = createRouter({
         isPeakSeason,
         marketplace,
       } = input;
+
+      const db = getDb();
+      let realProductId = input.productId;
+
+      // Handle generic calculations without a linked product ID
+      if (realProductId === 1 || !realProductId) {
+        const genericRows = await db
+          .select()
+          .from(products)
+          .where(and(eq(products.userId, ctx.user.id), eq(products.asin, "GENERIC-CALCULATOR")))
+          .limit(1);
+
+        if (genericRows[0]) {
+          realProductId = genericRows[0].id;
+        } else {
+          const [genericProduct] = await db
+            .insert(products)
+            .values({
+              userId: ctx.user.id,
+              asin: "GENERIC-CALCULATOR",
+              title: "FBA Calculator Generic Product",
+              price: "29.99",
+              marketplace: marketplace || "US",
+              status: "researching",
+            })
+            .returning();
+          realProductId = genericProduct.id;
+        }
+      }
 
       const fees = await calculateFbaFees(marketplace, productSize, sellingPrice, category);
 
@@ -138,9 +167,8 @@ export const fbaRouter = createRouter({
           sellingPrice) *
         100;
 
-      const db = getDb();
       const insertData: any = {
-        productId: input.productId,
+        productId: realProductId,
         sellingPrice,
         productCost,
         shippingCost,
