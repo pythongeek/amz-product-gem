@@ -15,6 +15,13 @@
       "when": 1783789995588,
       "tag": "0001_slimy_baron_strucker",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784150641852,
+      "tag": "0002_curvy_hiroim",
+      "breakpoints": true
     }
   ]
 }

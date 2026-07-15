@@ -10,9 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import ReportViewer from "@/components/ReportViewer";
 import {
   ArrowLeft, Save, FileText, TrendingUp, CheckCircle, Loader2, Sparkles,
-  BarChart3, DollarSign, Clock, AlertTriangle, XCircle, Zap, Shield, Info
+  BarChart3, DollarSign, Clock, AlertTriangle, XCircle, Zap, Shield, Info, Download
 } from "lucide-react";
 import { toast } from "sonner";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 import {
   Tooltip,
   TooltipContent,
@@ -31,6 +33,7 @@ export default function ResearchResults() {
   const [scores, setScores] = useState<any>(null);
   const [jobStatus, setJobStatus] = useState<any>(null);
   const [pollError, setPollError] = useState("");
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const [isSaved, setIsSaved] = useState(false);
 
@@ -106,6 +109,46 @@ export default function ResearchResults() {
       console.error(error);
     } finally {
       setIsGeneratingReport(false);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    const input = document.getElementById("report-content");
+    if (!input) {
+      toast.error("রিপোর্ট কন্টেন্ট পাওয়া যায়নি।");
+      return;
+    }
+    setIsGeneratingPdf(true);
+    try {
+      // Small timeout to allow UI to settle if needed
+      await new Promise(r => setTimeout(r, 100));
+      const canvas = await html2canvas(input, { scale: 2, useCORS: true, logging: false });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      let heightLeft = pdfHeight;
+      let position = 0;
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      pdf.addImage(imgData, "PNG", 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - pdfHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`product-research-${Date.now()}.pdf`);
+      toast.success("পিডিএফ ডাউনলোড সম্পন্ন হয়েছে! ✅");
+    } catch (err) {
+      console.error(err);
+      toast.error("পিডিএফ তৈরি করতে সমস্যা হয়েছে।");
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
 
@@ -229,6 +272,10 @@ export default function ResearchResults() {
               {isGeneratingReport ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
               {report ? "রিপোর্ট রিফ্রেশ" : "রিপোর্ট জেনারেট"}
             </Button>
+            <Button onClick={handleDownloadPDF} disabled={isGeneratingPdf || !isCompleted} variant="outline" className="rounded-xl border-blue-200 text-blue-700 hover:bg-blue-50">
+              {isGeneratingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+              পিডিএফ ডাউনলোড
+            </Button>
             {isCompleted && jobStatus?.productId && (
               <Button
                 onClick={() => navigate(`/launch/${jobStatus.productId}`)}
@@ -277,7 +324,7 @@ export default function ResearchResults() {
 
         {/* Main Content */}
         {isCompleted && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div id="report-content" className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-white dark:bg-slate-900 p-2 sm:p-4 rounded-2xl">
             {/* Left sidebar */}
             <div className="lg:col-span-1 space-y-4">
               {/* Verdict Card */}

@@ -212,20 +212,7 @@ cronApp.post("/process-research", async (c) => {
         ? "সতর্কতা (CAUTION) — ঝুঁকি আছে"
         : "বর্জন (FAIL) — এড়িয়ে চলুন";
 
-    // Save report
-    await db.insert(reports).values({
-      productId: 0, // placeholder — will be linked when user saves
-      userId: job.userId || 0,
-      title: job.input,
-      content: result,
-      summary: result.substring(0, 500) + "...",
-      marketAnalysis: result,
-      competitionAnalysis: result,
-      profitAnalysis: result,
-      riskAnalysis: result,
-      recommendation,
-      language: "bn",
-    });
+
 
     // Mark job as completed
     await db
