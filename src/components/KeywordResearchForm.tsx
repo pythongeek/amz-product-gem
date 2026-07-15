@@ -94,7 +94,8 @@ export default function KeywordResearchForm() {
   };
   
   return (
-    <Card className="border-0 shadow-lg bg-white dark:bg-slate-800 overflow-hidden">
+    <>
+      <Card className="border-0 shadow-lg bg-white dark:bg-slate-800 overflow-hidden">
       <CardContent className="p-8">
         <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-6">
           কীওয়ার্ড বা সার্চ URL দিয়ে প্রোডাক্ট বিশ্লেষণ
@@ -167,5 +168,79 @@ export default function KeywordResearchForm() {
         </div>
       </CardContent>
     </Card>
+      {/* Visual Loading Overlay with Countdown Timer and Process Steps */}
+      {isAnalyzing && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-2xl rounded-3xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <CardContent className="p-8 text-center space-y-6">
+              {/* Circular Countdown Loader */}
+              <div className="relative w-24 h-24 mx-auto">
+                <div className="absolute inset-0 rounded-full border-4 border-slate-100 dark:border-slate-800" />
+                <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center text-xl font-bold text-blue-600 dark:text-blue-400">
+                  {timeLeft}s
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-bold text-slate-950 dark:text-white flex items-center justify-center gap-2">
+                  <Sparkles className="h-5 w-5 text-yellow-500 animate-pulse" />
+                  কীওয়ার্ড বিশ্লেষণ চলছে
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  গড় সময়কাল: ৬০ সেকেন্ড। লিস্টিং ডেটা বিশ্লেষণ করা হচ্ছে।
+                </p>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                <div 
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 h-full transition-all duration-1000 ease-out rounded-full" 
+                  style={{ width: `${((60 - timeLeft) / 60) * 100}%` }}
+                />
+              </div>
+
+              {/* Steps Progress List */}
+              <div className="text-left space-y-4 pt-5 border-t border-slate-100 dark:border-slate-800">
+                {researchSteps.map((step, idx) => {
+                  const Icon = step.icon;
+                  const isCurrent = idx === activeStep;
+                  const isCompleted = idx < activeStep;
+                  return (
+                    <div 
+                      key={step.title} 
+                      className={`flex gap-3 transition-all duration-300 ${
+                        isCurrent ? "opacity-100 scale-100 font-semibold" : isCompleted ? "opacity-60" : "opacity-30 scale-95"
+                      }`}
+                    >
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
+                        isCompleted 
+                          ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" 
+                          : isCurrent
+                            ? "bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 animate-pulse" 
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-400"
+                      }`}>
+                        {isCompleted ? "✓" : <Icon className="h-3.5 w-3.5" />}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          {step.title}
+                          {isCurrent && <Loader2 className="h-3 w-3 animate-spin text-blue-600 dark:text-blue-400" />}
+                        </h4>
+                        {isCurrent && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                            {step.desc}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </>
   );
 }

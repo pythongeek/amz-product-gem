@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { products, folders, productScores, productSnapshots } from "@db/schema";
+import { products, folders, productScores, productSnapshots, reports, fbaCalculations, alerts, launchStrategies } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { scoreProduct } from "./lib/scoring";
 import { fetchAmazonProduct } from "./lib/amazon-paapi";
@@ -128,6 +128,15 @@ export const productRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
+      
+      // Manually delete child records first to prevent foreign key violations
+      await db.delete(productScores).where(eq(productScores.productId, input.id));
+      await db.delete(productSnapshots).where(eq(productSnapshots.productId, input.id));
+      await db.delete(reports).where(eq(reports.productId, input.id));
+      await db.delete(fbaCalculations).where(eq(fbaCalculations.productId, input.id));
+      await db.delete(alerts).where(eq(alerts.productId, input.id));
+      await db.delete(launchStrategies).where(eq(launchStrategies.productId, input.id));
+
       await db
         .delete(products)
         .where(and(eq(products.id, input.id), eq(products.userId, ctx.user.id)));

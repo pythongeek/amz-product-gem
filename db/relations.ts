@@ -9,6 +9,8 @@ import {
   launchStrategies,
   folders,
   researchJobs,
+  keywordSearches,
+  keywordSearchListings,
 } from "./schema";
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -67,4 +69,13 @@ export const foldersRelations = relations(folders, ({ one }) => ({
 
 export const researchJobsRelations = relations(researchJobs, ({ one }) => ({
   user: one(users, { fields: [researchJobs.userId], references: [users.id] }),
+}));
+
+export const keywordSearchesRelations = relations(keywordSearches, ({ one, many }) => ({
+  user: one(users, { fields: [keywordSearches.userId], references: [users.id] }),
+  listings: many(keywordSearchListings),
+}));
+
+export const keywordSearchListingsRelations = relations(keywordSearchListings, ({ one }) => ({
+  search: one(keywordSearches, { fields: [keywordSearchListings.searchId], references: [keywordSearches.id] }),
 }));
