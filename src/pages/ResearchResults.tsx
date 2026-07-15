@@ -235,9 +235,25 @@ export default function ResearchResults() {
     },
   ] : [];
 
-  const totalScore = scores?.totalScore || 0;
-  const grade = scores?.grade || "B";
-  const recommendation = scores?.recommendation || "সতর্কতা (CAUTION)";
+  const computedTotalScore = scores ? Object.values(scores)
+    .filter(val => typeof val === "number")
+    .reduce((a: any, b: any) => a + b, 0) : 0;
+  
+  const totalScore = scores?.totalScore || computedTotalScore || 0;
+  
+  // Calculate grade dynamically if missing
+  let computedGrade = "B";
+  let computedRec = "সতর্কতা (CAUTION)";
+  if (totalScore >= 100) {
+    computedGrade = "A";
+    computedRec = "যান (GO) — ভাল সুযোগ";
+  } else if (totalScore < 70) {
+    computedGrade = "C";
+    computedRec = "বর্জন (FAIL) — এড়িয়ে চলুন";
+  }
+
+  const grade = scores?.grade || computedGrade;
+  const recommendation = scores?.recommendation || computedRec;
   const scorePct = Math.round((totalScore / 130) * 100);
 
   const gradeConfig: Record<string, { color: string; bg: string; border: string; icon: React.ReactNode }> = {

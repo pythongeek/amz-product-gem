@@ -203,6 +203,7 @@ cronApp.post("/process-research", async (c) => {
       manufacturabilityScore: Math.floor(Math.random() * 5) + 4,
       marginScore: Math.floor(Math.random() * 5) + 4,
     };
+    
     const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
     const grade = totalScore >= 100 ? "A" : totalScore >= 70 ? "B" : "C";
     const recommendation =
@@ -212,7 +213,12 @@ cronApp.post("/process-research", async (c) => {
         ? "সতর্কতা (CAUTION) — ঝুঁকি আছে"
         : "বর্জন (FAIL) — এড়িয়ে চলুন";
 
-
+    const finalScores = {
+      ...scores,
+      totalScore,
+      grade,
+      recommendation
+    };
 
     // Mark job as completed
     await db
@@ -220,7 +226,7 @@ cronApp.post("/process-research", async (c) => {
       .set({
         status: "completed",
         result,
-        scores: scores as any,
+        scores: finalScores as any,
         completedAt: new Date(),
       })
       .where(eq(researchJobs.id, job.id));
