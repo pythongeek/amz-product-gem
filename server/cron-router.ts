@@ -246,7 +246,9 @@ cronApp.post("/process-research", async (c) => {
       .where(eq(researchJobs.id, job.id));
 
     return c.json({ ok: false, processed: 0, jobId: job.id, error: err.message }, 500);
-  }
+cronApp.post("/check-alerts", async (c) => {
+  // Placeholder for alert checking logic
+  return c.json({ ok: true, message: "Alerts checked (placeholder)" });
 });
 
 export default cronApp;
