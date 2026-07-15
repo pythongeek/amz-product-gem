@@ -104,6 +104,43 @@ export default function Research() {
   const [timeLeft, setTimeLeft] = useState(60);
   const [activeStep, setActiveStep] = useState(0);
 
+  // Polling state for queued jobs
+  const [pendingJobId, setPendingJobId] = useState<number | null>(null);
+  const [pendingResult, setPendingResult] = useState<any>(null);
+  const [pendingIsManual, setPendingIsManual] = useState(false);
+
+  const jobStatusQuery = trpc.job.getJobStatus.useQuery(
+    { jobId: pendingJobId! },
+    { enabled: !!pendingJobId, refetchInterval: 2000 }
+  );
+
+  // Monitor the polled job status
+  useEffect(() => {
+    if (jobStatusQuery.data) {
+      const { status } = jobStatusQuery.data;
+      if (status === "completed") {
+        setIsAnalyzing(false);
+        setPendingJobId(null);
+        navigate("/research/results", {
+          state: {
+            result: pendingResult,
+            searchConfig: {
+              url: pendingIsManual ? "" : url,
+              keyword: pendingIsManual ? manualTitle : keyword,
+              marketplace,
+              experience,
+              budget,
+            },
+          },
+        });
+      } else if (status === "failed") {
+        setIsAnalyzing(false);
+        setPendingJobId(null);
+        console.error("Job failed:", jobStatusQuery.data.error);
+      }
+    }
+  }, [jobStatusQuery.data, navigate, pendingIsManual, pendingResult, url, keyword, manualTitle, marketplace, experience, budget]);
+
   // Timer and step progression logic
   useEffect(() => {
     let timer: any;
@@ -170,22 +207,12 @@ export default function Research() {
         isFragile: isManualMode ? isFragile : undefined,
       });
 
-      // Navigate to results page with state
-      navigate("/research/results", {
-        state: {
-          result,
-          searchConfig: {
-            url: isManualMode ? "" : url,
-            keyword: isManualMode ? manualTitle : keyword,
-            marketplace,
-            experience,
-            budget,
-          },
-        },
-      });
+      // Instead of navigating immediately, save the job ID and start polling
+      setPendingResult(result);
+      setPendingIsManual(isManualMode);
+      setPendingJobId(result.jobId);
     } catch (error) {
       console.error("Research error:", error);
-    } finally {
       setIsAnalyzing(false);
     }
   };

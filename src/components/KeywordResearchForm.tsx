@@ -45,6 +45,32 @@ export default function KeywordResearchForm() {
   const [timeLeft, setTimeLeft] = useState(60);
   const [activeStep, setActiveStep] = useState(0);
 
+  // Polling state for queued keyword search
+  const [pendingSearchId, setPendingSearchId] = useState<number | null>(null);
+
+  const statusQuery = trpc.keywordResearch.getStatus.useQuery(
+    { searchId: pendingSearchId! },
+    { enabled: !!pendingSearchId, refetchInterval: 2000 }
+  );
+
+  // Monitor the polled status
+  useEffect(() => {
+    if (statusQuery.data) {
+      const { status } = statusQuery.data;
+      if (status === "completed") {
+        setIsAnalyzing(false);
+        setPendingSearchId(null);
+        navigate("/research/keyword-results", {
+          state: { searchId: statusQuery.data.id },
+        });
+      } else if (status === "failed") {
+        setIsAnalyzing(false);
+        setPendingSearchId(null);
+        console.error("Keyword research failed:", statusQuery.data.error);
+      }
+    }
+  }, [statusQuery.data, navigate]);
+
   // Parse input to determine marketplace
   const { keyword, marketplace: detectedMarketplace } = parseAmazonSearchInput(input);
   
@@ -82,13 +108,10 @@ export default function KeywordResearchForm() {
         marketplace,
       });
       
-      // Navigate to results page with state
-      navigate("/research/keyword-results", {
-        state: { searchId: result.searchId },
-      });
+      // Instead of navigating immediately, save searchId and start polling
+      setPendingSearchId(result.searchId);
     } catch (error) {
       console.error("Keyword research error:", error);
-    } finally {
       setIsAnalyzing(false);
     }
   };
