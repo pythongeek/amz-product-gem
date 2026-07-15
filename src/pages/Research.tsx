@@ -109,37 +109,6 @@ export default function Research() {
   const [pendingResult, setPendingResult] = useState<any>(null);
   const [pendingIsManual, setPendingIsManual] = useState(false);
 
-  const jobStatusQuery = trpc.job.getJobStatus.useQuery(
-    { jobId: pendingJobId! },
-    { enabled: !!pendingJobId, refetchInterval: 2000 }
-  );
-
-  // Monitor the polled job status
-  useEffect(() => {
-    if (jobStatusQuery.data) {
-      const { status } = jobStatusQuery.data;
-      if (status === "completed") {
-        setIsAnalyzing(false);
-        setPendingJobId(null);
-        navigate("/research/results", {
-          state: {
-            result: pendingResult,
-            searchConfig: {
-              url: pendingIsManual ? "" : url,
-              keyword: pendingIsManual ? manualTitle : keyword,
-              marketplace,
-              experience,
-              budget,
-            },
-          },
-        });
-      } else if (status === "failed") {
-        setIsAnalyzing(false);
-        setPendingJobId(null);
-        console.error("Job failed:", jobStatusQuery.data.error);
-      }
-    }
-  }, [jobStatusQuery.data, navigate, pendingIsManual, pendingResult, url, keyword, manualTitle, marketplace, experience, budget]);
 
   // Timer and step progression logic
   useEffect(() => {
@@ -178,6 +147,38 @@ export default function Research() {
   const [hasBattery, setHasBattery] = useState(false);
   const [isElectronic, setIsElectronic] = useState(false);
   const [isFragile, setIsFragile] = useState(false);
+
+  const jobStatusQuery = trpc.job.getJobStatus.useQuery(
+    { jobId: pendingJobId! },
+    { enabled: !!pendingJobId, refetchInterval: 2000 }
+  );
+
+  // Monitor the polled job status
+  useEffect(() => {
+    if (jobStatusQuery.data) {
+      const { status } = jobStatusQuery.data;
+      if (status === "completed") {
+        setIsAnalyzing(false);
+        setPendingJobId(null);
+        navigate("/research/results", {
+          state: {
+            result: pendingResult,
+            searchConfig: {
+              url: pendingIsManual ? "" : url,
+              keyword: pendingIsManual ? manualTitle : keyword,
+              marketplace,
+              experience,
+              budget,
+            },
+          },
+        });
+      } else if (status === "failed") {
+        setIsAnalyzing(false);
+        setPendingJobId(null);
+        console.error("Job failed:", jobStatusQuery.data.error);
+      }
+    }
+  }, [jobStatusQuery.data, navigate, pendingIsManual, pendingResult, url, keyword, manualTitle, marketplace, experience, budget]);
 
   const handleResearch = async (isManualMode = false) => {
     const searchTerm = isManualMode ? manualTitle : url || keyword;
