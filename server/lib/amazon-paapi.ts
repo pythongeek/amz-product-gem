@@ -441,8 +441,15 @@ export async function fetchAmazonProduct(asin: string, marketplace = "US"): Prom
   const secretKey = env.awsSecretKey;
   const associateTag = env.associateTag;
 
-  // Fallback to Microlink scraper / Mock Data if credentials are missing
+  const scraperApiKey = env.scraperApiKey;
+
+  // Fallback to ScraperAPI or Microlink if credentials are missing
   if (!accessKey || !secretKey || !associateTag) {
+    if (scraperApiKey) {
+      console.log(`[Scraper] Using ScraperAPI for product fetch (PA-API keys missing).`);
+      return fetchProductWithScraperAPI(asin, marketplace, scraperApiKey);
+    }
+
     console.warn("PA-API Credentials missing. Falling back to Microlink live scraper.");
     const scraped = await fetchWithMicrolink(asin, marketplace);
     if (scraped) {
@@ -450,7 +457,7 @@ export async function fetchAmazonProduct(asin: string, marketplace = "US"): Prom
     }
 
     console.warn("Scraper fallback failed.");
-    throw new Error("Unable to scrape Amazon product details (Microlink failed). Please verify the URL/ASIN or enter specifications manually.");
+    throw new Error("Unable to scrape Amazon product details (Microlink/ScraperAPI failed). Please verify the URL/ASIN or enter specifications manually.");
   }
 
   const { host, region } = getHostAndRegion(marketplace);
@@ -614,5 +621,44 @@ async function fetchListingsWithScraperAPI(keyword: string, marketplace: string,
   return {
     totalResultCount: items.length * 10,
     items
+  };
+}
+
+export async function fetchProductWithScraperAPI(asin: string, marketplace: string, apiKey: string): Promise<PAAPIProduct> {
+  const domainMap: Record<string, string> = {
+    US: "amazon.com", UK: "amazon.co.uk", DE: "amazon.de", CA: "amazon.ca",
+    FR: "amazon.fr", IT: "amazon.it", ES: "amazon.es", JP: "amazon.co.jp"
+  };
+  const domain = domainMap[marketplace.toUpperCase()] || "amazon.com";
+  
+  const targetUrl = `https://www.${domain}/dp/${asin}`;
+  
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    url: targetUrl,
+    autoparse: "true"
+  });
+
+  const url = `https://api.scraperapi.com/?${params.toString()}`;
+  
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`ScraperAPI failed to fetch product: ${res.status}`);
+  }
+  
+  const json = (await res.json()) as any;
+  if (!json || (!json.name && !json.title)) {
+    throw new Error("No product data found from ScraperAPI");
+  }
+
+  return {
+    asin: asin,
+    title: json.name || json.title || "Unknown",
+    brand: json.brand || "Unknown",
+    price: json.price || 0,
+    imageUrl: json.image || json.images?.[0] || "",
+    rating: json.stars || json.rating || 0,
+    reviewCount: json.total_reviews || json.reviews_total || 0,
+    isPrime: !!json.is_prime
   };
 }

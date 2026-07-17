@@ -7,7 +7,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { callAIWithFallback, buildGroundedSystemPrompt, BANGLA_SYSTEM_PROMPT } from "./lib/ai";
 import { TRPCError } from "@trpc/server";
 import { scoreProduct, extractSpecsFromReport, ProductInput } from "./lib/scoring";
-import { fetchListingsForKeyword } from "./lib/amazon-paapi";
+import { fetchListingsForKeyword, fetchAmazonProduct } from "./lib/amazon-paapi";
 import { assessMarket, scoreListing, mapToKeywordSearchListing } from "./lib/listing-analysis";
 import { appRouter } from "./router";
 
@@ -178,47 +178,85 @@ cronApp.post("/process-research", async (c) => {
     .where(eq(researchJobs.id, job.id));
 
   try {
-    const prompt = job.inputType === "url"
-      ? `Analyze this Amazon product URL: ${job.input}. Provide a comprehensive Amazon FBA research report in Bangla. Include: product summary, market demand, competition analysis, pricing, sales velocity, profit potential, risks, and a final recommendation (PASS/CAUTION/FAIL).`
-      : `Conduct Amazon FBA research on the keyword: "${job.input}". Provide a comprehensive report in Bangla. Include: market demand, competition level, estimated pricing, sales velocity, profit potential, risks, and a final recommendation (PASS/CAUTION/FAIL).`;
+    let prompt = "";
+    let finalScores: any = {};
+
+    if (job.inputType === "url") {
+      // Extract ASIN from URL
+      const match = job.input.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/);
+      const asin = match ? match[1] : job.input;
+      
+      const product = await fetchAmazonProduct(asin, "US");
+      
+      prompt = `Analyze this Amazon product:
+ASIN: ${product.asin}
+Title: ${product.title}
+Brand: ${product.brand}
+Price: $${product.price}
+Rating: ${product.rating} stars (${product.reviewCount} reviews)
+Is Prime: ${product.isPrime ? 'Yes' : 'No'}
+
+Provide a comprehensive Amazon FBA research report in Bangla. Include: product summary, market demand, competition analysis, pricing, sales velocity, profit potential, risks, and a final recommendation (PASS/CAUTION/FAIL).`;
+
+      // Real scores based on product
+      const productScore = scoreProduct({
+        price: product.price,
+        size: "standard", // Mock for now as we don't scrape size
+        weight: 1, // Mock
+        searchVolume: 10000,
+        reviewCount: product.reviewCount,
+        category: "General",
+        seasonality: "Medium",
+        simplicity: "High",
+        trend: "Stable",
+        brandDominance: product.brand === "Unknown" ? "Low" : "Medium",
+        margin: 30, // Mock
+        differentiation: "Medium",
+        manufacturability: "Easy"
+      });
+
+      finalScores = productScore.scores;
+
+    } else {
+      const keyword = job.input;
+      const result = await fetchListingsForKeyword(keyword, "US");
+      const marketAssessment = assessMarket(result.items, result.totalResultCount);
+
+      prompt = `Conduct Amazon FBA research on the keyword: "${keyword}".
+Market Overview:
+- Average Price: $${marketAssessment.avgPrice.toFixed(2)}
+- Average Reviews: ${marketAssessment.avgReviewCount.toFixed(0)}
+- Top Brand Share: ${(marketAssessment.topBrandShare * 100).toFixed(1)}%
+- Total Listings Analyzed: ${result.items.length}
+
+Provide a comprehensive report in Bangla. Include: market demand, competition level, estimated pricing, sales velocity, profit potential, risks, and a final recommendation (PASS/CAUTION/FAIL).`;
+
+      // Estimate keyword scores based on market averages
+      const marketScore = scoreProduct({
+        price: marketAssessment.avgPrice,
+        size: "standard",
+        weight: 1,
+        searchVolume: result.totalResultCount > 1000 ? 50000 : 5000,
+        reviewCount: marketAssessment.avgReviewCount,
+        category: "General",
+        seasonality: "Medium",
+        simplicity: "Medium",
+        trend: "Stable",
+        brandDominance: marketAssessment.topBrandShare > 0.3 ? "High" : "Low",
+        margin: 30,
+        differentiation: "Medium",
+        manufacturability: "Medium"
+      });
+
+      finalScores = marketScore.scores;
+    }
 
     const result = await callAIWithFallback([
       { role: "system", content: BANGLA_SYSTEM_PROMPT },
       { role: "user", content: prompt },
     ]);
 
-    // Generate 13-point scores
-    const scores = {
-      priceScore: Math.floor(Math.random() * 5) + 5,
-      sizeWeightScore: Math.floor(Math.random() * 4) + 6,
-      marketSizeScore: Math.floor(Math.random() * 5) + 4,
-      reviewBarrierScore: Math.floor(Math.random() * 5) + 4,
-      differentiationScore: Math.floor(Math.random() * 5) + 4,
-      seasonalityScore: Math.floor(Math.random() * 4) + 5,
-      complexityScore: Math.floor(Math.random() * 5) + 4,
-      returnRateScore: Math.floor(Math.random() * 4) + 5,
-      brandDominanceScore: Math.floor(Math.random() * 5) + 4,
-      trendScore: Math.floor(Math.random() * 4) + 5,
-      defensibilityScore: Math.floor(Math.random() * 4) + 5,
-      manufacturabilityScore: Math.floor(Math.random() * 5) + 4,
-      marginScore: Math.floor(Math.random() * 5) + 4,
-    };
-    
-    const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
-    const grade = totalScore >= 100 ? "A" : totalScore >= 70 ? "B" : "C";
-    const recommendation =
-      grade === "A"
-        ? "যান (GO) — ভাল সুযোগ"
-        : grade === "B"
-        ? "সতর্কতা (CAUTION) — ঝুঁকি আছে"
-        : "বর্জন (FAIL) — এড়িয়ে চলুন";
-
-    const finalScores = {
-      ...scores,
-      totalScore,
-      grade,
-      recommendation
-    };
+    // finalScores is already calculated above
 
     // Mark job as completed
     await db
