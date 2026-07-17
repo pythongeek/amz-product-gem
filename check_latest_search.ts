@@ -19,10 +19,10 @@ async function test() {
     totalResultCount: search.totalResultCount,
   });
 
-  const listings = await db.select().from(keywordSearchListings).where(eq(keywordSearchListings.searchId, search.id)).limit(3);
+  const listings = await db.select().from(keywordSearchListings).where(eq(keywordSearchListings.searchId, search.id)).limit(10);
   console.log("Sample listings for this search:");
   for (const item of listings) {
-    console.log(`- [${item.asin}] ${item.title.substring(0, 50)}... | $${item.price} | Brand: ${item.brand}`);
+    console.log(`- [${item.asin}] Score: ${item.perListingScore} | Verdict: ${item.perListingVerdict} | Title: ${item.title.substring(0, 50)}...`);
   }
 
   process.exit(0);

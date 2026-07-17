@@ -216,7 +216,8 @@ export function mapToKeywordSearchListing(
   searchId: number,
   position: number,
   score: number,
-  verdict: string
+  verdict: string,
+  reason: string
 ): KeywordSearchListing {
   return {
     searchId,
@@ -233,5 +234,6 @@ export function mapToKeywordSearchListing(
     isPrime: item.isPrime || false,
     perListingScore: score,
     perListingVerdict: verdict as "strong" | "vulnerable" | "avoid",
+    perListingVerdictReason: reason,
   };
 }

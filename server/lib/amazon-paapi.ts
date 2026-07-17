@@ -327,6 +327,12 @@ function extractSignedPaapiRequest() {
 }
 
 function getSignedPaapiRequest(host: string, region: string, path: string, target: string, payload: any) {
+  const accessKey = env.awsAccessKey;
+  const secretKey = env.awsSecretKey;
+  if (!accessKey || !secretKey) {
+    throw new Error("Missing AWS credentials for signing");
+  }
+
   const service = "ProductAdvertisingAPI";
   const body = JSON.stringify(payload);
   const now = new Date();
@@ -369,6 +375,8 @@ export async function fetchListingsForKeyword(
   const rainforestApiKey = env.rainforestApiKey;
   const scraperApiKey = env.scraperApiKey;
 
+  const associateTag = env.associateTag;
+
   if (!accessKey || !secretKey || !associateTag) {
     if (scraperApiKey) {
       console.log(`[Scraper] Using ScraperAPI for keyword search (PA-API keys missing).`);
@@ -403,13 +411,26 @@ export async function fetchListingsForKeyword(
 
   const { url, headers, body } = getSignedPaapiRequest(host, region, path, target, payload);
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body,
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers,
+      body,
+    });
+  } catch (error) {
+    if (scraperApiKey) {
+      console.log(`[Scraper] PA-API fetch failed. Falling back to ScraperAPI...`);
+      return fetchListingsWithScraperAPI(keyword, marketplace, itemPage, scraperApiKey);
+    }
+    throw error;
+  }
 
   if (!response.ok) {
+    if (scraperApiKey) {
+      console.log(`[Scraper] PA-API SearchItems failed (${response.status}). Falling back to ScraperAPI...`);
+      return fetchListingsWithScraperAPI(keyword, marketplace, itemPage, scraperApiKey);
+    }
     const errorText = await response.text();
     throw new Error(`PA-API SearchItems failed (${response.status}): ${errorText}`);
   }
@@ -418,6 +439,10 @@ export async function fetchListingsForKeyword(
   const result = data?.SearchResult;
 
   if (!result) {
+    if (scraperApiKey) {
+      console.log(`[Scraper] No search results from PA-API. Falling back to ScraperAPI...`);
+      return fetchListingsWithScraperAPI(keyword, marketplace, itemPage, scraperApiKey);
+    }
     throw new Error(`No search results for keyword "${keyword}"`);
   }
 

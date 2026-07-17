@@ -371,6 +371,7 @@ export const keywordSearchListings = pgTable("keyword_search_listings", {
   isPrime: boolean("is_prime").default(false),
   perListingScore: integer("per_listing_score"),
   perListingVerdict: varchar("per_listing_verdict", { length: 20 }), // "strong" | "vulnerable" | "avoid"
+  perListingVerdictReason: text("per_listing_verdict_reason"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

@@ -69,36 +69,29 @@ cronApp.post("/process-keyword-search", async (c) => {
     const { keyword, marketplace } = search;
     const result = await fetchListingsForKeyword(keyword, marketplace);
 
-    // Insert listings into database
-    const listingsToInsert = result.items.map((item, index) => 
-      mapToKeywordSearchListing(item, search.id, index + 1, 50, "vulnerable")
-    );
-
-    await db.insert(keywordSearchListings).values(listingsToInsert);
-
     // Calculate market assessment
     const marketAssessment = assessMarket(result.items, result.totalResultCount);
 
-    // Score each listing
-    const scoredListings = result.items.map((item, index) => {
+    // Calculate top brand
+    const brands = result.items.map(l => l.brand).filter(b => b);
+    const brandCounts: Record<string, number> = {};
+    brands.forEach(brand => {
+      brandCounts[brand] = (brandCounts[brand] || 0) + 1;
+    });
+    const topBrand = Object.entries(brandCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+
+    // Score each listing and map to database structure
+    const listingsToInsert = result.items.map((item, index) => {
       const scoreResult = scoreListing(item, {
         medianReviews: marketAssessment.avgReviewCount,
         medianPrice: marketAssessment.avgPrice,
-        topBrand: "", // Will be calculated in assessMarket
+        topBrand: topBrand,
       });
-      return mapToKeywordSearchListing(item, search.id, index + 1, scoreResult.score, scoreResult.verdict);
+      return mapToKeywordSearchListing(item, search.id, index + 1, scoreResult.score, scoreResult.verdict, scoreResult.reason);
     });
 
-    // Update listings with scores
-    for (const listing of scoredListings) {
-      await db
-        .update(keywordSearchListings)
-        .set({
-          perListingScore: listing.perListingScore,
-          perListingVerdict: listing.perListingVerdict,
-        })
-        .where(eq(keywordSearchListings.id, listing.id));
-    }
+    // Insert scored listings into database
+    await db.insert(keywordSearchListings).values(listingsToInsert);
 
     // Generate AI summary report using grounded prompt
     const systemPrompt = await buildGroundedSystemPrompt(marketplace);
