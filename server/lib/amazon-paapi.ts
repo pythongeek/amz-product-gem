@@ -366,10 +366,14 @@ export async function fetchListingsForKeyword(
 ): Promise<PAAPISearchResult> {
   const accessKey = env.awsAccessKey;
   const secretKey = env.awsSecretKey;
-  const associateTag = env.associateTag;
+  const rainforestApiKey = env.rainforestApiKey;
 
   if (!accessKey || !secretKey || !associateTag) {
-    throw new Error("PA-API credentials missing. Please configure AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AMAZON_ASSOCIATE_TAG.");
+    if (rainforestApiKey) {
+      console.log(`[Scraper] Using Rainforest API for keyword search (PA-API keys missing).`);
+      return fetchListingsWithRainforest(keyword, marketplace, itemPage, rainforestApiKey);
+    }
+    throw new Error("PA-API credentials missing. Please configure AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AMAZON_ASSOCIATE_TAG, or use a RAINFOREST_API_KEY as an alternative.");
   }
 
   const { host, region } = getHostAndRegion(marketplace);
@@ -517,5 +521,49 @@ export async function fetchAmazonProduct(asin: string, marketplace = "US"): Prom
     imageUrl,
     rating: parseFloat(String(rating)),
     reviewCount: parseInt(String(reviewCount)),
+  };
+}
+
+async function fetchListingsWithRainforest(keyword: string, marketplace: string, itemPage: number, apiKey: string): Promise<PAAPISearchResult> {
+  const domainMap: Record<string, string> = {
+    US: "amazon.com", UK: "amazon.co.uk", DE: "amazon.de", CA: "amazon.ca",
+    FR: "amazon.fr", IT: "amazon.it", ES: "amazon.es", JP: "amazon.co.jp"
+  };
+  const domain = domainMap[marketplace.toUpperCase()] || "amazon.com";
+  
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    type: "search",
+    amazon_domain: domain,
+    search_term: keyword,
+    page: String(itemPage)
+  });
+
+  const url = `https://api.rainforestapi.com/request?${params.toString()}`;
+  
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Rainforest API failed: ${res.status}`);
+  }
+  
+  const json = (await res.json()) as any;
+  if (!json.search_results) {
+    throw new Error("No search results from Rainforest API");
+  }
+
+  const items = json.search_results.map((item: any) => ({
+    asin: item.asin || "",
+    title: item.title || "Unknown",
+    brand: item.brand,
+    price: item.price?.value || 0,
+    imageUrl: item.image || "",
+    rating: item.rating || 0,
+    reviewCount: item.ratings_total || 0,
+    isPrime: !!item.is_prime
+  }));
+
+  return {
+    totalResultCount: json.search_results.length * 10,
+    items
   };
 }

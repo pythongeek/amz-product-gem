@@ -72,4 +72,5 @@ export const env = {
   awsSecretKey: process.env.AWS_SECRET_KEY || "",
   associateTag: process.env.ASSOCIATE_TAG || "",
   awsRegion: process.env.AWS_REGION || "us-east-1",
+  rainforestApiKey: process.env.RAINFOREST_API_KEY || "",
 };
