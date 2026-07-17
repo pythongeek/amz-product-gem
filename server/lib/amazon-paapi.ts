@@ -605,7 +605,7 @@ async function fetchListingsWithRainforest(keyword: string, marketplace: string,
   };
 }
 
-async function fetchListingsWithScraperAPI(keyword: string, marketplace: string, itemPage: number, apiKey: string): Promise<PAAPISearchResult> {
+export async function fetchListingsWithScraperAPI(keyword: string, marketplace: string, itemPage: number, apiKey: string): Promise<PAAPISearchResult> {
   const domainMap: Record<string, string> = {
     US: "amazon.com", UK: "amazon.co.uk", DE: "amazon.de", CA: "amazon.ca",
     FR: "amazon.fr", IT: "amazon.it", ES: "amazon.es", JP: "amazon.co.jp"

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { env } from "./lib/env";
 import { getDb } from "./queries/connection";
 import { researchJobs, reports, products, productScores, alerts, productSnapshots, keywordSearches, keywordSearchListings } from "@db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, or, isNull, isNotNull } from "drizzle-orm";
 import { callAIWithFallback, buildGroundedSystemPrompt, BANGLA_SYSTEM_PROMPT } from "./lib/ai";
 import { TRPCError } from "@trpc/server";
 import { scoreProduct, extractSpecsFromReport, ProductInput } from "./lib/scoring";
@@ -44,65 +44,93 @@ cronApp.use("*", requireCronSecret);
 cronApp.post("/process-keyword-search", async (c) => {
   const db = getDb();
 
-  // Pick one pending keyword search (FIFO)
-  const pending = await db
+  // Pick one pending OR partially processed keyword search (FIFO)
+  const jobs = await db
     .select()
     .from(keywordSearches)
-    .where(eq(keywordSearches.status, "pending"))
+    .where(
+      or(
+        eq(keywordSearches.status, "pending"),
+        and(
+          eq(keywordSearches.status, "running"),
+          isNotNull(keywordSearches.aggregateScores),
+          isNull(keywordSearches.summaryReport)
+        )
+      )
+    )
     .orderBy(keywordSearches.createdAt)
     .limit(1);
 
-  if (pending.length === 0) {
-    return c.json({ ok: true, processed: 0, message: "No pending keyword searches" });
+  if (jobs.length === 0) {
+    return c.json({ ok: true, processed: 0, message: "No pending or partially processed keyword searches" });
   }
 
-  const search = pending[0];
-
-  // Mark as running
-  await db
-    .update(keywordSearches)
-    .set({ status: "running", startedAt: new Date() })
-    .where(eq(keywordSearches.id, search.id));
+  const search = jobs[0];
 
   try {
-    // Fetch listings from Amazon PA-API
     const { keyword, marketplace } = search;
-    const result = await fetchListingsForKeyword(keyword, marketplace);
 
-    // Calculate market assessment
-    const marketAssessment = assessMarket(result.items, result.totalResultCount);
+    // --- PHASE 1: Scrape & Insert (if status is pending) ---
+    if (search.status === "pending") {
+      // Mark as running
+      await db
+        .update(keywordSearches)
+        .set({ status: "running", startedAt: new Date() })
+        .where(eq(keywordSearches.id, search.id));
 
-    // Calculate top brand
-    const brands = result.items.map(l => l.brand).filter(b => b);
-    const brandCounts: Record<string, number> = {};
-    brands.forEach(brand => {
-      brandCounts[brand] = (brandCounts[brand] || 0) + 1;
-    });
-    const topBrand = Object.entries(brandCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+      // Fetch listings from Amazon PA-API
+      const result = await fetchListingsForKeyword(keyword, marketplace);
 
-    // Score each listing and map to database structure
-    const listingsToInsert = result.items.map((item, index) => {
-      const scoreResult = scoreListing(item, {
-        medianReviews: marketAssessment.avgReviewCount,
-        medianPrice: marketAssessment.avgPrice,
-        topBrand: topBrand,
+      // Calculate market assessment
+      const marketAssessment = assessMarket(result.items, result.totalResultCount);
+
+      // Calculate top brand
+      const brands = result.items.map(l => l.brand).filter(b => b);
+      const brandCounts: Record<string, number> = {};
+      brands.forEach(brand => {
+        brandCounts[brand] = (brandCounts[brand] || 0) + 1;
       });
-      return mapToKeywordSearchListing(item, search.id, index + 1, scoreResult.score, scoreResult.verdict, scoreResult.reason);
-    });
+      const topBrand = Object.entries(brandCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
 
-    // Insert scored listings into database
-    await db.insert(keywordSearchListings).values(listingsToInsert);
+      // Score each listing and map to database structure
+      const listingsToInsert = result.items.map((item, index) => {
+        const scoreResult = scoreListing(item, {
+          medianReviews: marketAssessment.avgReviewCount,
+          medianPrice: marketAssessment.avgPrice,
+          topBrand: topBrand,
+        });
+        return mapToKeywordSearchListing(item, search.id, index + 1, scoreResult.score, scoreResult.verdict, scoreResult.reason);
+      });
 
-    // Generate AI summary report using grounded prompt
-    const systemPrompt = await buildGroundedSystemPrompt(marketplace);
-    
-    const userPrompt = `## কীওয়ার্ড: "${keyword}"
+      // Insert scored listings into database
+      if (listingsToInsert.length > 0) {
+        await db.insert(keywordSearchListings).values(listingsToInsert);
+      }
+
+      // Save aggregate scores and keep status as 'running' so Phase 2 picks it up next time
+      await db
+        .update(keywordSearches)
+        .set({
+          totalResultCount: result.totalResultCount,
+          aggregateScores: marketAssessment as any,
+        })
+        .where(eq(keywordSearches.id, search.id));
+
+      return c.json({ ok: true, processed: 1, phase: 1, searchId: search.id, totalListings: result.items.length });
+    }
+
+    // --- PHASE 2: AI Summary (if status is running and scores exist) ---
+    if (search.status === "running" && search.aggregateScores) {
+      const marketAssessment: any = search.aggregateScores;
+      const systemPrompt = await buildGroundedSystemPrompt(marketplace);
+      
+      const userPrompt = `## কীওয়ার্ড: "${keyword}"
 ## মার্কেটপ্লেস: ${marketplace}
-## মোট ফলাফল: ${result.totalResultCount}
+## মোট ফলাফল: ${search.totalResultCount}
 
 ### মার্কেট ওভারভিউ:
-- গড় প্রাইস: $${marketAssessment.avgPrice.toFixed(2)}
-- গড় রিভিউ: ${marketAssessment.avgReviewCount.toFixed(0)}
+- গড় প্রাইস: $${marketAssessment.avgPrice?.toFixed(2)}
+- গড় রিভিউ: ${marketAssessment.avgReviewCount?.toFixed(0)}
 - ব্র্যান্ড কনসেন্ট্রেশন: ${(marketAssessment.topBrandShare * 100).toFixed(1)}%
 - প্রাইস স্প্রেড: ${(marketAssessment.priceSpreadRatio * 100).toFixed(1)}%
 - রিভিউ গ্যাপ: ${(marketAssessment.reviewCountGiniLike * 100).toFixed(1)}%
@@ -116,24 +144,25 @@ cronApp.post("/process-keyword-search", async (c) => {
 
 এই মার্কেট সম্পর্কে একজন নতুন ব্যবসায়ীর জন্য বিস্তারিত বিশ্লেষণ এবং সুপারিশ তৈরি করুন।`;
 
-    const aiResult = await callAIWithFallback([
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ]);
+      const aiResult = await callAIWithFallback([
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ]);
 
-    // Update search with results
-    await db
-      .update(keywordSearches)
-      .set({
-        status: "completed",
-        totalResultCount: result.totalResultCount,
-        aggregateScores: marketAssessment as any,
-        summaryReport: aiResult,
-        completedAt: new Date(),
-      })
-      .where(eq(keywordSearches.id, search.id));
+      // Update search with results
+      await db
+        .update(keywordSearches)
+        .set({
+          status: "completed",
+          summaryReport: aiResult,
+          completedAt: new Date(),
+        })
+        .where(eq(keywordSearches.id, search.id));
 
-    return c.json({ ok: true, processed: 1, searchId: search.id, totalListings: result.items.length });
+      return c.json({ ok: true, processed: 1, phase: 2, searchId: search.id });
+    }
+
+    return c.json({ ok: true, processed: 0, message: "No valid phase to process" });
   } catch (err: any) {
     // Mark search as failed
     await db
