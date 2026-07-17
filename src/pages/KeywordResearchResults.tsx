@@ -186,7 +186,7 @@ export default function KeywordResearchResults() {
                   <TrendingUp className="h-4 w-4 text-slate-500" />
                   <span className="text-sm text-slate-600 dark:text-slate-400">গড় প্রাইস:</span>
                   <span className="font-semibold text-slate-800 dark:text-white">
-                    ${marketAssessment?.avgPrice?.toFixed(2) || "0.00"}
+                    ${Number(marketAssessment?.avgPrice || 0).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -216,8 +216,8 @@ export default function KeywordResearchResults() {
           <CardContent className="p-4 text-center">
             <p className="text-sm text-slate-500 dark:text-slate-400">ব্র্যান্ড ডোমিনেন্স</p>
             <p className="text-xl font-bold text-slate-900 dark:text-white">
-              {(marketAssessment?.topBrandShare || 0) > 0 
-                ? `${(marketAssessment.topBrandShare * 100).toFixed(1)}%`
+              {(Number(marketAssessment?.topBrandShare) || 0) > 0 
+                ? `${(Number(marketAssessment.topBrandShare) * 100).toFixed(1)}%`
                 : "0%"}
             </p>
           </CardContent>
@@ -226,8 +226,8 @@ export default function KeywordResearchResults() {
           <CardContent className="p-4 text-center">
             <p className="text-sm text-slate-500 dark:text-slate-400">প্রাইস স্প্রেড</p>
             <p className="text-xl font-bold text-slate-900 dark:text-white">
-              {(marketAssessment?.priceSpreadRatio || 0) > 0 
-                ? `${(marketAssessment.priceSpreadRatio * 100).toFixed(1)}%`
+              {(Number(marketAssessment?.priceSpreadRatio) || 0) > 0 
+                ? `${(Number(marketAssessment.priceSpreadRatio) * 100).toFixed(1)}%`
                 : "0%"}
             </p>
           </CardContent>
@@ -236,8 +236,8 @@ export default function KeywordResearchResults() {
           <CardContent className="p-4 text-center">
             <p className="text-sm text-slate-500 dark:text-slate-400">রিভিউ গ্যাপ</p>
             <p className="text-xl font-bold text-slate-900 dark:text-white">
-              {(marketAssessment?.reviewCountGiniLike || 0) > 0 
-                ? `${(marketAssessment.reviewCountGiniLike * 100).toFixed(1)}%`
+              {(Number(marketAssessment?.reviewCountGiniLike) || 0) > 0 
+                ? `${(Number(marketAssessment.reviewCountGiniLike) * 100).toFixed(1)}%`
                 : "0%"}
             </p>
           </CardContent>
@@ -285,12 +285,12 @@ export default function KeywordResearchResults() {
                             </p>
                             <div className="flex items-center gap-3 mt-2">
                               <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                                ${listing.price?.toFixed(2) || "0.00"}
+                                ${Number(listing.price || 0).toFixed(2)}
                               </span>
                               <div className="flex items-center gap-1">
                                 <span className="text-yellow-500 text-sm">★</span>
                                 <span className="text-sm">
-                                  {listing.rating?.toFixed(1) || "0.0"} ({listing.reviewCount?.toLocaleString() || "0"})
+                                  {Number(listing.rating || 0).toFixed(1)} ({Number(listing.reviewCount || 0).toLocaleString()})
                                 </span>
                               </div>
                               {listing.isPrime && (
@@ -312,7 +312,7 @@ export default function KeywordResearchResults() {
                                     : "bg-rose-100 text-rose-800 border-rose-200"
                               }`}
                             >
-                              {listing.perListingScore?.toFixed(0) || "0"}/100
+                              {Number(listing.perListingScore || 0).toFixed(0)}/100
                             </Badge>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 capitalize">
                               {listing.perListingVerdict || "pending"}
