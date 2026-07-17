@@ -367,13 +367,18 @@ export async function fetchListingsForKeyword(
   const accessKey = env.awsAccessKey;
   const secretKey = env.awsSecretKey;
   const rainforestApiKey = env.rainforestApiKey;
+  const scraperApiKey = env.scraperApiKey;
 
   if (!accessKey || !secretKey || !associateTag) {
+    if (scraperApiKey) {
+      console.log(`[Scraper] Using ScraperAPI for keyword search (PA-API keys missing).`);
+      return fetchListingsWithScraperAPI(keyword, marketplace, itemPage, scraperApiKey);
+    }
     if (rainforestApiKey) {
       console.log(`[Scraper] Using Rainforest API for keyword search (PA-API keys missing).`);
       return fetchListingsWithRainforest(keyword, marketplace, itemPage, rainforestApiKey);
     }
-    throw new Error("PA-API credentials missing. Please configure AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AMAZON_ASSOCIATE_TAG, or use a RAINFOREST_API_KEY as an alternative.");
+    throw new Error("PA-API credentials missing. Please configure AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AMAZON_ASSOCIATE_TAG, or use SCRAPER_API_KEY as an alternative.");
   }
 
   const { host, region } = getHostAndRegion(marketplace);
@@ -564,6 +569,50 @@ async function fetchListingsWithRainforest(keyword: string, marketplace: string,
 
   return {
     totalResultCount: json.search_results.length * 10,
+    items
+  };
+}
+
+async function fetchListingsWithScraperAPI(keyword: string, marketplace: string, itemPage: number, apiKey: string): Promise<PAAPISearchResult> {
+  const domainMap: Record<string, string> = {
+    US: "amazon.com", UK: "amazon.co.uk", DE: "amazon.de", CA: "amazon.ca",
+    FR: "amazon.fr", IT: "amazon.it", ES: "amazon.es", JP: "amazon.co.jp"
+  };
+  const domain = domainMap[marketplace.toUpperCase()] || "amazon.com";
+  
+  const targetUrl = `https://www.${domain}/s?k=${encodeURIComponent(keyword)}&page=${itemPage}`;
+  
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    url: targetUrl,
+    autoparse: "true"
+  });
+
+  const url = `https://api.scraperapi.com/?${params.toString()}`;
+  
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`ScraperAPI failed: ${res.status}`);
+  }
+  
+  const json = (await res.json()) as any;
+  if (!json || !json.results) {
+    throw new Error("No search results from ScraperAPI");
+  }
+
+  const items = json.results.map((item: any) => ({
+    asin: item.asin || "",
+    title: item.name || "Unknown",
+    brand: item.brand,
+    price: item.price || 0,
+    imageUrl: item.image || "",
+    rating: item.stars || 0,
+    reviewCount: item.total_reviews || 0,
+    isPrime: !!item.is_prime
+  }));
+
+  return {
+    totalResultCount: items.length * 10,
     items
   };
 }

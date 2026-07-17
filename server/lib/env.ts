@@ -73,4 +73,5 @@ export const env = {
   associateTag: process.env.ASSOCIATE_TAG || "",
   awsRegion: process.env.AWS_REGION || "us-east-1",
   rainforestApiKey: process.env.RAINFOREST_API_KEY || "",
+  scraperApiKey: process.env.SCRAPER_API_KEY || "",
 };
