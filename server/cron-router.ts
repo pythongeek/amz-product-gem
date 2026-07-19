@@ -340,8 +340,110 @@ Write the report in Bangla based exclusively on this observed aggregate data. Do
 });
 
 cronApp.post("/check-alerts", async c => {
-  // Placeholder for alert checking logic
-  return c.json({ ok: true, message: "Alerts checked (placeholder)" });
+  const db = getDb();
+  const tracked = await db
+    .select()
+    .from(products)
+    .orderBy(products.updatedAt)
+    .limit(25);
+  let checked = 0;
+  let alertsCreated = 0;
+
+  for (const product of tracked) {
+    try {
+      const live = await fetchAmazonProduct(
+        product.asin,
+        product.marketplace || "US"
+      );
+      if (!live.title || live.price <= 0) continue;
+
+      const [previous] = await db
+        .select()
+        .from(productSnapshots)
+        .where(eq(productSnapshots.productId, product.id))
+        .orderBy(desc(productSnapshots.capturedAt))
+        .limit(1);
+      const changes: Array<{
+        type: "price_drop" | "bsr_change" | "new_review";
+        oldValue: string;
+        newValue: string;
+        message: string;
+      }> = [];
+      const oldPrice = previous?.price ? Number(previous.price) : null;
+      if (oldPrice !== null && live.price < oldPrice)
+        changes.push({
+          type: "price_drop",
+          oldValue: String(oldPrice),
+          newValue: String(live.price),
+          message: "Live Amazon price decreased",
+        });
+      if (
+        previous?.bsr !== null &&
+        previous?.bsr !== undefined &&
+        live.bsr !== undefined &&
+        live.bsr !== previous.bsr
+      )
+        changes.push({
+          type: "bsr_change",
+          oldValue: String(previous.bsr),
+          newValue: String(live.bsr),
+          message: "Live Amazon BSR changed",
+        });
+      if (
+        previous?.reviewCount !== null &&
+        previous?.reviewCount !== undefined &&
+        live.reviewCount > previous.reviewCount
+      )
+        changes.push({
+          type: "new_review",
+          oldValue: String(previous.reviewCount),
+          newValue: String(live.reviewCount),
+          message: "Live Amazon review count increased",
+        });
+
+      await db
+        .update(products)
+        .set({
+          title: live.title,
+          price: String(live.price),
+          rating: live.rating ? String(live.rating) : null,
+          reviewCount: live.reviewCount || null,
+          bsr: live.bsr ?? null,
+          bsrCategory: live.bsrCategory ?? null,
+          imageUrl: live.imageUrl || null,
+          updatedAt: new Date(),
+        })
+        .where(eq(products.id, product.id));
+      await db
+        .insert(productSnapshots)
+        .values({
+          productId: product.id,
+          price: String(live.price),
+          bsr: live.bsr ?? null,
+          reviewCount: live.reviewCount || null,
+        });
+      if (changes.length) {
+        await db
+          .insert(alerts)
+          .values(
+            changes.map(change => ({
+              productId: product.id,
+              userId: product.userId,
+              alertType: change.type,
+              oldValue: change.oldValue,
+              newValue: change.newValue,
+              message: change.message,
+            }))
+          );
+        alertsCreated += changes.length;
+      }
+      checked++;
+    } catch (error) {
+      console.warn("[check-alerts] Live refresh failed", error);
+    }
+  }
+
+  return c.json({ ok: true, checked, alertsCreated });
 });
 
 export default cronApp;

@@ -6,15 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/hooks/useAuth";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   Select,
@@ -30,17 +21,34 @@ import {
   Filter,
   ArrowRight,
   FolderOpen,
-  FileUp,
-  Upload,
   Loader2,
   Trash2,
+  RefreshCw,
+  ExternalLink,
+  Clock3,
+  TriangleAlert,
 } from "lucide-react";
 
+const amazonDomains: Record<string, string> = {
+  US: "amazon.com",
+  UK: "amazon.co.uk",
+  DE: "amazon.de",
+  CA: "amazon.ca",
+  FR: "amazon.fr",
+  IT: "amazon.it",
+  ES: "amazon.es",
+  JP: "amazon.co.jp",
+};
+
 const statusColors: Record<string, string> = {
-  researching: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  hot_opportunity: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
-  sourced: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
-  launched: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+  researching:
+    "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  hot_opportunity:
+    "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+  sourced:
+    "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
+  launched:
+    "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
   archived: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
 };
 
@@ -53,7 +61,6 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function Products() {
-  const { user } = useAuth();
   const utils = trpc.useUtils();
   const { data: products, isLoading } = trpc.product.list.useQuery();
   const { data: folders } = trpc.product.listFolders.useQuery();
@@ -65,8 +72,10 @@ export default function Products() {
   const [quickUrl, setQuickUrl] = useState("");
   const [quickMarketplace, setQuickMarketplace] = useState("US");
   const [isSavingUrl, setIsSavingUrl] = useState(false);
+  const [refreshingId, setRefreshingId] = useState<number | null>(null);
 
   const quickSaveMutation = trpc.product.quickSaveUrl.useMutation();
+  const refreshMutation = trpc.product.refresh.useMutation();
 
   const handleQuickSave = async () => {
     if (!quickUrl.trim()) {
@@ -76,11 +85,16 @@ export default function Products() {
 
     setIsSavingUrl(true);
     try {
-      const product = await quickSaveMutation.mutateAsync({
+      const result = await quickSaveMutation.mutateAsync({
         url: quickUrl,
-        marketplace: quickMarketplace,
+        marketplace: quickMarketplace as
+          "US" | "UK" | "DE" | "CA" | "FR" | "IT" | "ES" | "JP",
       });
-      toast.success(`"${product.title || product.asin}" সফলভাবে সেভ করা হয়েছে!`);
+      toast.success(
+        result.created
+          ? `লাইভ Amazon ডাটা থেকে ${result.product.asin} সেভ করা হয়েছে`
+          : `${result.product.asin} এর লাইভ ডাটা আপডেট করা হয়েছে`
+      );
       setQuickUrl("");
       utils.product.list.invalidate();
     } catch (err: any) {
@@ -91,6 +105,21 @@ export default function Products() {
   };
 
   const deleteMutation = trpc.product.delete.useMutation();
+
+  const handleRefresh = async (e: React.MouseEvent, productId: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setRefreshingId(productId);
+    try {
+      await refreshMutation.mutateAsync({ productId });
+      toast.success("লাইভ Amazon ডাটা রিফ্রেশ হয়েছে");
+      utils.product.list.invalidate();
+    } catch (err: any) {
+      toast.error(err.message || "লাইভ ডাটা রিফ্রেশ ব্যর্থ হয়েছে");
+    } finally {
+      setRefreshingId(null);
+    }
+  };
 
   const handleDelete = async (e: React.MouseEvent, id: number) => {
     e.preventDefault();
@@ -109,50 +138,12 @@ export default function Products() {
     }
   };
 
-  // CSV Import state
-  const [csvText, setCsvText] = useState("");
-  const [isImportOpen, setIsImportOpen] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-
-  const bulkImportMutation = trpc.product.bulkImport.useMutation();
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      setCsvText(text);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleImportSubmit = async () => {
-    if (!csvText.trim()) {
-      toast.error("অনুগ্রহ করে কিছু CSV টেক্সট লিখুন বা ফাইল আপলোড করুন।");
-      return;
-    }
-    setIsImporting(true);
-    try {
-      const resp = await bulkImportMutation.mutateAsync({ csvContent: csvText });
-      toast.success(`${resp.count}টি প্রোডাক্ট সফলভাবে ইম্পোর্ট করা হয়েছে!`);
-      setIsImportOpen(false);
-      setCsvText("");
-      utils.product.list.invalidate();
-    } catch (err: any) {
-      toast.error(`ইম্পোর্ট ব্যর্থ হয়েছে: ${err.message || "Unknown error"}`);
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
-  const filteredProducts = products?.filter((p) => {
+  const filteredProducts = products?.filter(p => {
     const matchesSearch =
       !search ||
       p.title?.toLowerCase().includes(search.toLowerCase()) ||
       p.asin.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus =
-      statusFilter === "all" || p.status === statusFilter;
+    const matchesStatus = statusFilter === "all" || p.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
@@ -166,60 +157,10 @@ export default function Products() {
               প্রোডাক্ট ভল্ট
             </h1>
             <p className="text-slate-500 dark:text-slate-400 mt-1">
-              সেভ করা সব প্রোডাক্ট ও রিসার্চ
+              শুধু যাচাইকৃত লাইভ Amazon ডাটা থেকে সেভ করা প্রোডাক্ট ট্র্যাক করুন
             </p>
           </div>
           <div className="flex gap-3">
-            {(user as any)?.experienceLevel === "advanced" && (
-              <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="rounded-full">
-                    <FileUp className="h-4 w-4 mr-2" />
-                    CSV বাল্ক ইম্পোর্ট
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-lg rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6">
-                  <DialogHeader>
-                    <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                      <Upload className="h-5 w-5 text-blue-600" />
-                      প্রোডাক্ট বাল্ক ইম্পোর্ট (CSV)
-                    </DialogTitle>
-                    <DialogDescription className="text-slate-500 text-xs">
-                      Keepa বা Helium10 থেকে এক্সপোর্ট করা প্রোডাক্ট ফাইল ইম্পোর্ট করুন। নিচের ফরম্যাট অনুসরণ করুন:
-                      <code className="block mt-2 p-2 bg-slate-100 dark:bg-slate-800 rounded font-mono text-[10px] text-slate-700 dark:text-slate-300">
-                        asin,price,bsr,reviews,title,marketplace,category,weight
-                      </code>
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 my-4">
-                    <div>
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">CSV ফাইল সিলেক্ট করুন</label>
-                      <Input type="file" accept=".csv" onChange={handleFileUpload} className="h-10 rounded-xl" />
-                    </div>
-                    <div className="relative flex justify-center text-xs text-slate-400">
-                      <span className="bg-white dark:bg-slate-900 px-2">অথবা সরাসরি পেস্ট করুন</span>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">CSV ডাটা পেস্ট করুন</label>
-                      <textarea
-                        value={csvText}
-                        onChange={(e) => setCsvText(e.target.value)}
-                        placeholder="asin,price,bsr,reviews...&#10;B08N5WRWNW,29.99,15000,120..."
-                        rows={6}
-                        className="w-full p-3 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-xl bg-transparent focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800 pt-4">
-                    <Button variant="ghost" onClick={() => setIsImportOpen(false)} disabled={isImporting} className="rounded-full">বাতিল</Button>
-                    <Button onClick={handleImportSubmit} disabled={isImporting} className="bg-blue-600 hover:bg-blue-700 text-white rounded-full">
-                      {isImporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                      ইম্পোর্ট করুন
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            )}
             <Link to="/research">
               <Button className="bg-blue-600 hover:bg-blue-700 rounded-full">
                 <Plus className="h-4 w-4 mr-2" />
@@ -235,13 +176,13 @@ export default function Products() {
             <div className="flex flex-col md:flex-row items-end gap-4">
               <div className="flex-1 w-full space-y-2">
                 <label className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  🔗 দ্রুত আমাজন লিংক সেভ করুন (Quick-Save URL for Later Research)
+                  🔗 লাইভ Amazon ডাটা যাচাই করে প্রোডাক্ট সেভ করুন
                 </label>
                 <div className="relative">
                   <Input
-                    placeholder="https://amazon.com/dp/B08N5WRWNW বা প্রোডাক্টের যেকোনো বিবরণ ইউআরএল পেস্ট করুন..."
+                    placeholder="https://www.amazon.com/dp/B08N5WRWNW"
                     value={quickUrl}
-                    onChange={(e) => setQuickUrl(e.target.value)}
+                    onChange={e => setQuickUrl(e.target.value)}
                     disabled={isSavingUrl}
                     className="h-12 pr-4 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
                   />
@@ -251,7 +192,11 @@ export default function Products() {
                 <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block">
                   মার্কেটপ্লেস
                 </label>
-                <Select value={quickMarketplace} onValueChange={setQuickMarketplace} disabled={isSavingUrl}>
+                <Select
+                  value={quickMarketplace}
+                  onValueChange={setQuickMarketplace}
+                  disabled={isSavingUrl}
+                >
                   <SelectTrigger className="h-12 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                     <SelectValue />
                   </SelectTrigger>
@@ -277,7 +222,7 @@ export default function Products() {
                 ) : (
                   <>
                     <Plus className="h-4 w-4" />
-                    সেভ করুন
+                    যাচাই ও সেভ
                   </>
                 )}
               </Button>
@@ -292,7 +237,7 @@ export default function Products() {
             <Input
               placeholder="প্রোডাক্ট বা ASIN সার্চ করুন..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
               className="pl-10 rounded-xl"
             />
           </div>
@@ -315,7 +260,7 @@ export default function Products() {
         {/* Folders */}
         {folders && folders.length > 0 && (
           <div className="flex gap-2 flex-wrap">
-            {folders.map((folder) => (
+            {folders.map(folder => (
               <Badge
                 key={folder.id}
                 variant="outline"
@@ -336,7 +281,7 @@ export default function Products() {
           </div>
         ) : filteredProducts && filteredProducts.length > 0 ? (
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredProducts.map((product) => (
+            {filteredProducts.map(product => (
               <Link key={product.id} to={`/products/${product.id}`}>
                 <Card className="border-0 shadow-lg hover:shadow-xl transition-all group cursor-pointer h-full">
                   <CardContent className="p-6">
@@ -346,14 +291,38 @@ export default function Products() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge
-                          className={statusColors[product.status || "researching"]}
+                          className={
+                            statusColors[product.status || "researching"]
+                          }
                         >
                           {statusLabels[product.status || "researching"]}
                         </Badge>
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={(e) => handleDelete(e, product.id)}
+                          title="Live refresh"
+                          onClick={e => handleRefresh(e, product.id)}
+                          disabled={refreshingId === product.id}
+                          className="h-8 w-8 rounded-full"
+                        >
+                          <RefreshCw
+                            className={`h-4 w-4 ${refreshingId === product.id ? "animate-spin" : ""}`}
+                          />
+                        </Button>
+                        <a
+                          href={`https://www.${amazonDomains[product.marketplace || "US"] || amazonDomains.US}/dp/${product.asin}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                          title="Open on Amazon"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={e => handleDelete(e, product.id)}
                           className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-full"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -401,8 +370,19 @@ export default function Products() {
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                      <span className="text-xs text-slate-400">
-                        {new Date(product.createdAt).toLocaleDateString("bn-BD")}
+                      <span
+                        className={`flex items-center gap-1 text-xs ${Date.now() - new Date(product.updatedAt).getTime() > 86400000 ? "text-amber-600" : "text-emerald-600"}`}
+                      >
+                        {Date.now() - new Date(product.updatedAt).getTime() >
+                        86400000 ? (
+                          <TriangleAlert className="h-3 w-3" />
+                        ) : (
+                          <Clock3 className="h-3 w-3" />
+                        )}
+                        {Date.now() - new Date(product.updatedAt).getTime() >
+                        86400000
+                          ? "রিফ্রেশ দরকার"
+                          : "লাইভ ডাটা"}
                       </span>
                       <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500 transition-colors" />
                     </div>
