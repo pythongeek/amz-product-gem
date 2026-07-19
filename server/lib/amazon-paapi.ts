@@ -4,6 +4,8 @@ import { env } from "./env";
 export interface PAAPIProduct {
   asin: string;
   title: string;
+  brand?: string;
+  isPrime?: boolean;
   price: number;
   imageUrl: string;
   rating: number;
@@ -25,19 +27,31 @@ export interface PAAPIProduct {
 function getHostAndRegion(marketplace: string) {
   const m = marketplace.toUpperCase();
   switch (m) {
-    case "US": return { host: "webservices.amazon.com", region: "us-east-1" };
-    case "UK": return { host: "webservices.amazon.co.uk", region: "eu-west-1" };
-    case "DE": return { host: "webservices.amazon.de", region: "eu-west-1" };
-    case "CA": return { host: "webservices.amazon.ca", region: "us-east-1" };
-    case "FR": return { host: "webservices.amazon.fr", region: "eu-west-1" };
-    case "IT": return { host: "webservices.amazon.it", region: "eu-west-1" };
-    case "ES": return { host: "webservices.amazon.es", region: "eu-west-1" };
-    case "JP": return { host: "webservices.amazon.co.jp", region: "us-west-2" };
-    default: return { host: "webservices.amazon.com", region: "us-east-1" };
+    case "US":
+      return { host: "webservices.amazon.com", region: "us-east-1" };
+    case "UK":
+      return { host: "webservices.amazon.co.uk", region: "eu-west-1" };
+    case "DE":
+      return { host: "webservices.amazon.de", region: "eu-west-1" };
+    case "CA":
+      return { host: "webservices.amazon.ca", region: "us-east-1" };
+    case "FR":
+      return { host: "webservices.amazon.fr", region: "eu-west-1" };
+    case "IT":
+      return { host: "webservices.amazon.it", region: "eu-west-1" };
+    case "ES":
+      return { host: "webservices.amazon.es", region: "eu-west-1" };
+    case "JP":
+      return { host: "webservices.amazon.co.jp", region: "us-west-2" };
+    default:
+      return { host: "webservices.amazon.com", region: "us-east-1" };
   }
 }
 
-function hmac(key: crypto.BinaryLike | crypto.KeyObject, data: string | Buffer): Buffer {
+function hmac(
+  key: crypto.BinaryLike | crypto.KeyObject,
+  data: string | Buffer
+): Buffer {
   return crypto.createHmac("sha256", key).update(data).digest();
 }
 
@@ -45,7 +59,12 @@ function sha256(data: string | Buffer): Buffer {
   return crypto.createHash("sha256").update(data).digest();
 }
 
-function getSignatureKey(key: string, dateStamp: string, regionName: string, serviceName: string): Buffer {
+function getSignatureKey(
+  key: string,
+  dateStamp: string,
+  regionName: string,
+  serviceName: string
+): Buffer {
   const kDate = hmac("AWS4" + key, dateStamp);
   const kRegion = hmac(kDate, regionName);
   const kService = hmac(kRegion, serviceName);
@@ -53,7 +72,10 @@ function getSignatureKey(key: string, dateStamp: string, regionName: string, ser
   return kSigning;
 }
 
-async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PAAPIProduct | null> {
+async function fetchWithMicrolink(
+  asin: string,
+  marketplace: string
+): Promise<PAAPIProduct | null> {
   try {
     const domainMap: Record<string, string> = {
       US: "amazon.com",
@@ -63,7 +85,7 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
       FR: "amazon.fr",
       IT: "amazon.it",
       ES: "amazon.es",
-      JP: "amazon.co.jp"
+      JP: "amazon.co.jp",
     };
     const domain = domainMap[marketplace.toUpperCase()] || "amazon.com";
     const targetUrl = `https://www.${domain}/dp/${asin}`;
@@ -80,26 +102,30 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
       "data.prodDetails.selector": "#prodDetails",
       "data.aplus.selector": "#aplus",
       "data.aplusV2.selector": ".aplus-v2",
-      "data.video.selector": "#videoOuterContainer, .video-player, #video_feature_div",
+      "data.video.selector":
+        "#videoOuterContainer, .video-player, #video_feature_div",
       "data.qaText.selector": "#askATFLink, a[href*='customerQAHeader']",
       "data.sellersText.selector": "#olpLinkWidget_feature_div, span.olp-from",
       "data.socialProof.selector": "#social-proofing-faceout-title-tk_bought",
       "data.choice.selector": ".ac-badge-wrapper, .ac-badge-feature",
-      "data.twister.selector": "#inline-twister-row-size_name, #inline-twister-row-color_name, #twister",
-      prerender: "true"
+      "data.twister.selector":
+        "#inline-twister-row-size_name, #inline-twister-row-color_name, #twister",
+      prerender: "true",
     });
     const url = `${baseUrl}?${params.toString()}`;
     console.log(`[Scraper] Fetching Amazon product via Microlink: ${url}`);
-    
+
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        "Accept": "application/json"
-      }
+        Accept: "application/json",
+      },
     });
 
     if (!response.ok) {
-      console.warn(`[Scraper] Microlink request failed with status: ${response.status}`);
+      console.warn(
+        `[Scraper] Microlink request failed with status: ${response.status}`
+      );
       return null;
     }
 
@@ -109,11 +135,11 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
       return null;
     }
 
-    const { 
-      title, 
-      price: priceStr, 
-      image, 
-      rating: ratingStr, 
+    const {
+      title,
+      price: priceStr,
+      image,
+      rating: ratingStr,
       reviews: reviewsStr,
       detailBullets,
       prodDetails,
@@ -124,9 +150,9 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
       sellersText,
       socialProof,
       choice,
-      twister
+      twister,
     } = json.data;
-    
+
     const cleanTitle = title ? title.trim() : "Unknown Amazon Product";
 
     let imageUrl = "";
@@ -161,31 +187,43 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
 
     // 1. Fallback rating extraction from detailsText
     if (parsedRating === 0 && detailsText) {
-      const ratingMatch = detailsText.match(/([0-9.]+)\s+out of 5 stars/i) || 
-                          detailsText.match(/([0-9.]+)\s+স্টার/i) ||
-                          detailsText.match(/acrPopover[\s\S]*?title="([0-9.]+)\s+out of 5/i);
+      const ratingMatch =
+        detailsText.match(/([0-9.]+)\s+out of 5 stars/i) ||
+        detailsText.match(/([0-9.]+)\s+স্টার/i) ||
+        detailsText.match(/acrPopover[\s\S]*?title="([0-9.]+)\s+out of 5/i);
       if (ratingMatch) parsedRating = parseFloat(ratingMatch[1]);
     }
 
     // 2. Fallback review count extraction from detailsText
     if (parsedReviewCount === 0 && detailsText) {
-      const reviewsMatch = detailsText.match(/acrCustomerReviewText[\s\S]*?>\s*\(([^)]+)\)/i) ||
-                           detailsText.match(/acrCustomerReviewText[\s\S]*?aria-label="([^"]+)"/i) ||
-                           detailsText.match(/([0-9,]+)\s+customer reviews/i) ||
-                           detailsText.match(/Customer Reviews[\s\S]*?\(([0-9,]+)\)/i) ||
-                           detailsText.match(/([0-9,]+)\s+ratings/i);
+      const reviewsMatch =
+        detailsText.match(/acrCustomerReviewText[\s\S]*?>\s*\(([^)]+)\)/i) ||
+        detailsText.match(
+          /acrCustomerReviewText[\s\S]*?aria-label="([^"]+)"/i
+        ) ||
+        detailsText.match(/([0-9,]+)\s+customer reviews/i) ||
+        detailsText.match(/Customer Reviews[\s\S]*?\(([0-9,]+)\)/i) ||
+        detailsText.match(/([0-9,]+)\s+ratings/i);
       if (reviewsMatch) {
-        const val = reviewsMatch[1].replace(/Reviews/gi, "").replace(/[^0-9]/g, "");
+        const val = reviewsMatch[1]
+          .replace(/Reviews/gi, "")
+          .replace(/[^0-9]/g, "");
         if (val) parsedReviewCount = parseInt(val, 10);
       }
     }
 
     // 3. Robust BSR parsing
-    const bsrMatch = 
-      detailsText.match(/Best Sellers Rank[\s\S]*?#([0-9,]+)\s+in\s+([A-Za-z\s&;,\-_/]+)/i) ||
-      detailsText.match(/Best Sellers Rank:\s*#?([0-9,]+)\s+in\s+([A-Za-z\s&;,\-_/]+)/i) || 
+    const bsrMatch =
+      detailsText.match(
+        /Best Sellers Rank[\s\S]*?#([0-9,]+)\s+in\s+([A-Za-z\s&;,\-_/]+)/i
+      ) ||
+      detailsText.match(
+        /Best Sellers Rank:\s*#?([0-9,]+)\s+in\s+([A-Za-z\s&;,\-_/]+)/i
+      ) ||
       detailsText.match(/#([0-9,]+)\s+in\s+([A-Za-z\s&;,\-_/]+)/i) ||
-      detailsText.match(/Best Sellers Rank\s*#?([0-9,]+)\s+in\s+([A-Za-z\s&;,\-_/]+)/i);
+      detailsText.match(
+        /Best Sellers Rank\s*#?([0-9,]+)\s+in\s+([A-Za-z\s&;,\-_/]+)/i
+      );
 
     if (bsrMatch) {
       parsedBsr = parseInt(bsrMatch[1].replace(/,/g, ""), 10);
@@ -197,11 +235,21 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
 
     const normalizedCategory = parsedBsrCategory.toLowerCase();
     let mappedCategory = "most_categories";
-    if (normalizedCategory.includes("electron") || normalizedCategory.includes("cell phone")) {
+    if (
+      normalizedCategory.includes("electron") ||
+      normalizedCategory.includes("cell phone")
+    ) {
       mappedCategory = "electronics";
-    } else if (normalizedCategory.includes("kitchen") || normalizedCategory.includes("home")) {
+    } else if (
+      normalizedCategory.includes("kitchen") ||
+      normalizedCategory.includes("home")
+    ) {
       mappedCategory = "home_kitchen";
-    } else if (normalizedCategory.includes("cloth") || normalizedCategory.includes("shoe") || normalizedCategory.includes("apparel")) {
+    } else if (
+      normalizedCategory.includes("cloth") ||
+      normalizedCategory.includes("shoe") ||
+      normalizedCategory.includes("apparel")
+    ) {
       mappedCategory = "clothing";
     } else if (normalizedCategory.includes("jewel")) {
       mappedCategory = "jewelry";
@@ -212,7 +260,7 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
     const parsedAmazonChoice = !!choice;
     const parsedHasAplusContent = !!(aplus || aplusV2);
     const parsedHasVideo = !!video;
-    
+
     let parsedQaCount = 0;
     if (qaText) {
       const qaMatch = qaText.match(/([0-9,]+)/);
@@ -223,13 +271,16 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
 
     let parsedSellerCount = 0;
     if (sellersText) {
-      const sellersMatch = sellersText.match(/\(([0-9,]+)\)/) || sellersText.match(/([0-9,]+)/);
+      const sellersMatch =
+        sellersText.match(/\(([0-9,]+)\)/) || sellersText.match(/([0-9,]+)/);
       if (sellersMatch) {
         parsedSellerCount = parseInt(sellersMatch[1].replace(/,/g, ""), 10);
       }
     }
-    const parsedFbaSellers = parsedSellerCount > 0 ? Math.ceil(parsedSellerCount * 0.6) : 0;
-    const parsedFbmSellers = parsedSellerCount > 0 ? Math.floor(parsedSellerCount * 0.4) : 0;
+    const parsedFbaSellers =
+      parsedSellerCount > 0 ? Math.ceil(parsedSellerCount * 0.6) : 0;
+    const parsedFbmSellers =
+      parsedSellerCount > 0 ? Math.floor(parsedSellerCount * 0.4) : 0;
 
     let parsedSalesEstimate = 0;
     if (socialProof) {
@@ -244,13 +295,17 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
       }
     } else {
       if (parsedBsr > 0) {
-        parsedSalesEstimate = Math.max(10, Math.round(150000 / Math.pow(parsedBsr, 0.45)));
+        parsedSalesEstimate = Math.max(
+          10,
+          Math.round(150000 / Math.pow(parsedBsr, 0.45))
+        );
       }
     }
 
-    const parsedReviewVelocity = parsedSalesEstimate > 0 
-      ? parseFloat(((parsedSalesEstimate * 0.015) / 30).toFixed(1)) 
-      : 0;
+    const parsedReviewVelocity =
+      parsedSalesEstimate > 0
+        ? parseFloat(((parsedSalesEstimate * 0.015) / 30).toFixed(1))
+        : 0;
     const parsedVariationCount = twister ? 3 : 0;
 
     console.log("[Scraper] Successfully scraped rich Amazon data:", {
@@ -271,7 +326,7 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
       hasVideo: parsedHasVideo,
       reviewVelocity: parsedReviewVelocity,
       salesEstimate: parsedSalesEstimate,
-      imageUrl
+      imageUrl,
     });
 
     return {
@@ -292,7 +347,7 @@ async function fetchWithMicrolink(asin: string, marketplace: string): Promise<PA
       hasVideo: parsedHasVideo,
       reviewVelocity: parsedReviewVelocity,
       salesEstimate: parsedSalesEstimate,
-      bsrCategory: mappedCategory
+      bsrCategory: mappedCategory,
     };
   } catch (err: any) {
     console.error("[Scraper] Error in Microlink scraper:", err.message);
@@ -314,19 +369,13 @@ export interface PAAPISearchResult {
   }>;
 }
 
-function extractSignedPaapiRequest() {
-  const accessKey = env.awsAccessKey;
-  const secretKey = env.awsSecretKey;
-  const associateTag = env.associateTag;
-
-  if (!accessKey || !secretKey || !associateTag) {
-    throw new Error("PA-API credentials missing");
-  }
-
-  return { accessKey, secretKey, associateTag };
-}
-
-function getSignedPaapiRequest(host: string, region: string, path: string, target: string, payload: any) {
+function getSignedPaapiRequest(
+  host: string,
+  region: string,
+  path: string,
+  target: string,
+  payload: any
+) {
   const accessKey = env.awsAccessKey;
   const secretKey = env.awsSecretKey;
   if (!accessKey || !secretKey) {
@@ -379,14 +428,30 @@ export async function fetchListingsForKeyword(
 
   if (!accessKey || !secretKey || !associateTag) {
     if (scraperApiKey) {
-      console.log(`[Scraper] Using ScraperAPI for keyword search (PA-API keys missing).`);
-      return fetchListingsWithScraperAPI(keyword, marketplace, itemPage, scraperApiKey);
+      console.log(
+        `[Scraper] Using ScraperAPI for keyword search (PA-API keys missing).`
+      );
+      return fetchListingsWithScraperAPI(
+        keyword,
+        marketplace,
+        itemPage,
+        scraperApiKey
+      );
     }
     if (rainforestApiKey) {
-      console.log(`[Scraper] Using Rainforest API for keyword search (PA-API keys missing).`);
-      return fetchListingsWithRainforest(keyword, marketplace, itemPage, rainforestApiKey);
+      console.log(
+        `[Scraper] Using Rainforest API for keyword search (PA-API keys missing).`
+      );
+      return fetchListingsWithRainforest(
+        keyword,
+        marketplace,
+        itemPage,
+        rainforestApiKey
+      );
     }
-    throw new Error("PA-API credentials missing. Please configure AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AMAZON_ASSOCIATE_TAG, or use SCRAPER_API_KEY as an alternative.");
+    throw new Error(
+      "PA-API credentials missing. Please configure AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AMAZON_ASSOCIATE_TAG, or use SCRAPER_API_KEY as an alternative."
+    );
   }
 
   const { host, region } = getHostAndRegion(marketplace);
@@ -409,7 +474,13 @@ export async function fetchListingsForKeyword(
     ItemPage: itemPage,
   };
 
-  const { url, headers, body } = getSignedPaapiRequest(host, region, path, target, payload);
+  const { url, headers, body } = getSignedPaapiRequest(
+    host,
+    region,
+    path,
+    target,
+    payload
+  );
 
   let response;
   try {
@@ -420,19 +491,35 @@ export async function fetchListingsForKeyword(
     });
   } catch (error) {
     if (scraperApiKey) {
-      console.log(`[Scraper] PA-API fetch failed. Falling back to ScraperAPI...`);
-      return fetchListingsWithScraperAPI(keyword, marketplace, itemPage, scraperApiKey);
+      console.log(
+        `[Scraper] PA-API fetch failed. Falling back to ScraperAPI...`
+      );
+      return fetchListingsWithScraperAPI(
+        keyword,
+        marketplace,
+        itemPage,
+        scraperApiKey
+      );
     }
     throw error;
   }
 
   if (!response.ok) {
     if (scraperApiKey) {
-      console.log(`[Scraper] PA-API SearchItems failed (${response.status}). Falling back to ScraperAPI...`);
-      return fetchListingsWithScraperAPI(keyword, marketplace, itemPage, scraperApiKey);
+      console.log(
+        `[Scraper] PA-API SearchItems failed (${response.status}). Falling back to ScraperAPI...`
+      );
+      return fetchListingsWithScraperAPI(
+        keyword,
+        marketplace,
+        itemPage,
+        scraperApiKey
+      );
     }
     const errorText = await response.text();
-    throw new Error(`PA-API SearchItems failed (${response.status}): ${errorText}`);
+    throw new Error(
+      `PA-API SearchItems failed (${response.status}): ${errorText}`
+    );
   }
 
   const data = (await response.json()) as any;
@@ -440,8 +527,15 @@ export async function fetchListingsForKeyword(
 
   if (!result) {
     if (scraperApiKey) {
-      console.log(`[Scraper] No search results from PA-API. Falling back to ScraperAPI...`);
-      return fetchListingsWithScraperAPI(keyword, marketplace, itemPage, scraperApiKey);
+      console.log(
+        `[Scraper] No search results from PA-API. Falling back to ScraperAPI...`
+      );
+      return fetchListingsWithScraperAPI(
+        keyword,
+        marketplace,
+        itemPage,
+        scraperApiKey
+      );
     }
     throw new Error(`No search results for keyword "${keyword}"`);
   }
@@ -461,7 +555,10 @@ export async function fetchListingsForKeyword(
   return { totalResultCount, items };
 }
 
-export async function fetchAmazonProduct(asin: string, marketplace = "US"): Promise<PAAPIProduct> {
+export async function fetchAmazonProduct(
+  asin: string,
+  marketplace = "US"
+): Promise<PAAPIProduct> {
   const accessKey = env.awsAccessKey;
   const secretKey = env.awsSecretKey;
   const associateTag = env.associateTag;
@@ -471,24 +568,30 @@ export async function fetchAmazonProduct(asin: string, marketplace = "US"): Prom
   // Fallback to ScraperAPI or Microlink if credentials are missing
   if (!accessKey || !secretKey || !associateTag) {
     if (scraperApiKey) {
-      console.log(`[Scraper] Using ScraperAPI for product fetch (PA-API keys missing).`);
+      console.log(
+        `[Scraper] Using ScraperAPI for product fetch (PA-API keys missing).`
+      );
       return fetchProductWithScraperAPI(asin, marketplace, scraperApiKey);
     }
 
-    console.warn("PA-API Credentials missing. Falling back to Microlink live scraper.");
+    console.warn(
+      "PA-API Credentials missing. Falling back to Microlink live scraper."
+    );
     const scraped = await fetchWithMicrolink(asin, marketplace);
     if (scraped) {
       return scraped;
     }
 
     console.warn("Scraper fallback failed.");
-    throw new Error("Unable to scrape Amazon product details (Microlink/ScraperAPI failed). Please verify the URL/ASIN or enter specifications manually.");
+    throw new Error(
+      "Unable to scrape Amazon product details (Microlink/ScraperAPI failed). Please verify the URL/ASIN or enter specifications manually."
+    );
   }
 
   const { host, region } = getHostAndRegion(marketplace);
   const path = "/paapi5/getitems";
   const service = "ProductAdvertisingAPI";
-  
+
   const payload = {
     ItemIds: [asin],
     Resources: [
@@ -496,10 +599,10 @@ export async function fetchAmazonProduct(asin: string, marketplace = "US"): Prom
       "ItemInfo.Title",
       "Offers.Listings.Price",
       "CustomerReviews.Count",
-      "CustomerReviews.StarRating"
+      "CustomerReviews.StarRating",
     ],
     PartnerType: "Associates",
-    PartnerTag: associateTag
+    PartnerTag: associateTag,
   };
 
   const body = JSON.stringify(payload);
@@ -535,7 +638,9 @@ export async function fetchAmazonProduct(asin: string, marketplace = "US"): Prom
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Amazon PA-API fetch failed (${response.status}): ${errorText}`);
+    throw new Error(
+      `Amazon PA-API fetch failed (${response.status}): ${errorText}`
+    );
   }
 
   const data = (await response.json()) as any;
@@ -561,28 +666,39 @@ export async function fetchAmazonProduct(asin: string, marketplace = "US"): Prom
   };
 }
 
-async function fetchListingsWithRainforest(keyword: string, marketplace: string, itemPage: number, apiKey: string): Promise<PAAPISearchResult> {
+async function fetchListingsWithRainforest(
+  keyword: string,
+  marketplace: string,
+  itemPage: number,
+  apiKey: string
+): Promise<PAAPISearchResult> {
   const domainMap: Record<string, string> = {
-    US: "amazon.com", UK: "amazon.co.uk", DE: "amazon.de", CA: "amazon.ca",
-    FR: "amazon.fr", IT: "amazon.it", ES: "amazon.es", JP: "amazon.co.jp"
+    US: "amazon.com",
+    UK: "amazon.co.uk",
+    DE: "amazon.de",
+    CA: "amazon.ca",
+    FR: "amazon.fr",
+    IT: "amazon.it",
+    ES: "amazon.es",
+    JP: "amazon.co.jp",
   };
   const domain = domainMap[marketplace.toUpperCase()] || "amazon.com";
-  
+
   const params = new URLSearchParams({
     api_key: apiKey,
     type: "search",
     amazon_domain: domain,
     search_term: keyword,
-    page: String(itemPage)
+    page: String(itemPage),
   });
 
   const url = `https://api.rainforestapi.com/request?${params.toString()}`;
-  
+
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Rainforest API failed: ${res.status}`);
   }
-  
+
   const json = (await res.json()) as any;
   if (!json.search_results) {
     throw new Error("No search results from Rainforest API");
@@ -596,37 +712,48 @@ async function fetchListingsWithRainforest(keyword: string, marketplace: string,
     imageUrl: item.image || "",
     rating: item.rating || 0,
     reviewCount: item.ratings_total || 0,
-    isPrime: !!item.is_prime
+    isPrime: !!item.is_prime,
   }));
 
   return {
     totalResultCount: json.search_results.length * 10,
-    items
+    items,
   };
 }
 
-export async function fetchListingsWithScraperAPI(keyword: string, marketplace: string, itemPage: number, apiKey: string): Promise<PAAPISearchResult> {
+export async function fetchListingsWithScraperAPI(
+  keyword: string,
+  marketplace: string,
+  itemPage: number,
+  apiKey: string
+): Promise<PAAPISearchResult> {
   const domainMap: Record<string, string> = {
-    US: "amazon.com", UK: "amazon.co.uk", DE: "amazon.de", CA: "amazon.ca",
-    FR: "amazon.fr", IT: "amazon.it", ES: "amazon.es", JP: "amazon.co.jp"
+    US: "amazon.com",
+    UK: "amazon.co.uk",
+    DE: "amazon.de",
+    CA: "amazon.ca",
+    FR: "amazon.fr",
+    IT: "amazon.it",
+    ES: "amazon.es",
+    JP: "amazon.co.jp",
   };
   const domain = domainMap[marketplace.toUpperCase()] || "amazon.com";
-  
+
   const targetUrl = `https://www.${domain}/s?k=${encodeURIComponent(keyword)}&page=${itemPage}`;
-  
+
   const params = new URLSearchParams({
     api_key: apiKey,
     url: targetUrl,
-    autoparse: "true"
+    autoparse: "true",
   });
 
   const url = `https://api.scraperapi.com/?${params.toString()}`;
-  
+
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`ScraperAPI failed: ${res.status}`);
   }
-  
+
   const json = (await res.json()) as any;
   if (!json || !json.results) {
     throw new Error("No search results from ScraperAPI");
@@ -640,37 +767,47 @@ export async function fetchListingsWithScraperAPI(keyword: string, marketplace: 
     imageUrl: item.image || "",
     rating: item.stars || 0,
     reviewCount: item.total_reviews || 0,
-    isPrime: !!item.is_prime
+    isPrime: !!item.is_prime,
   }));
 
   return {
     totalResultCount: items.length * 10,
-    items
+    items,
   };
 }
 
-export async function fetchProductWithScraperAPI(asin: string, marketplace: string, apiKey: string): Promise<PAAPIProduct> {
+export async function fetchProductWithScraperAPI(
+  asin: string,
+  marketplace: string,
+  apiKey: string
+): Promise<PAAPIProduct> {
   const domainMap: Record<string, string> = {
-    US: "amazon.com", UK: "amazon.co.uk", DE: "amazon.de", CA: "amazon.ca",
-    FR: "amazon.fr", IT: "amazon.it", ES: "amazon.es", JP: "amazon.co.jp"
+    US: "amazon.com",
+    UK: "amazon.co.uk",
+    DE: "amazon.de",
+    CA: "amazon.ca",
+    FR: "amazon.fr",
+    IT: "amazon.it",
+    ES: "amazon.es",
+    JP: "amazon.co.jp",
   };
   const domain = domainMap[marketplace.toUpperCase()] || "amazon.com";
-  
+
   const targetUrl = `https://www.${domain}/dp/${asin}`;
-  
+
   const params = new URLSearchParams({
     api_key: apiKey,
     url: targetUrl,
-    autoparse: "true"
+    autoparse: "true",
   });
 
   const url = `https://api.scraperapi.com/?${params.toString()}`;
-  
+
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`ScraperAPI failed to fetch product: ${res.status}`);
   }
-  
+
   const json = (await res.json()) as any;
   if (!json || (!json.name && !json.title)) {
     throw new Error("No product data found from ScraperAPI");
@@ -684,6 +821,6 @@ export async function fetchProductWithScraperAPI(asin: string, marketplace: stri
     imageUrl: json.image || json.images?.[0] || "",
     rating: json.stars || json.rating || 0,
     reviewCount: json.total_reviews || json.reviews_total || 0,
-    isPrime: !!json.is_prime
+    isPrime: !!json.is_prime,
   };
 }

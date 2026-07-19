@@ -1,56 +1,50 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
-import { callAIWithFallback, buildGroundedSystemPrompt, BANGLA_SYSTEM_PROMPT } from "./lib/ai";
+import {
+  callAIWithFallback,
+  buildGroundedSystemPrompt,
+  BANGLA_SYSTEM_PROMPT,
+} from "./lib/ai";
 import { getDb } from "./queries/connection";
 import { productScores, researchJobs, products, reports } from "@db/schema";
 import { scoreProduct, extractSpecsFromReport } from "./lib/scoring";
 import { eq, desc } from "drizzle-orm";
-
 
 export const analysisRouter = createRouter({
   // ── Analyze Product (queue-based to bypass 8s timeout) ──
   analyzeProduct: authedQuery
     .input(
       z.object({
-        title: z.string(),
-        asin: z.string(),
-        marketplace: z.string().default("US"),
+        title: z.string().min(1),
+        asin: z.string().optional(),
+        marketplace: z
+          .enum(["US", "UK", "DE", "CA", "FR", "IT", "ES", "JP"])
+          .default("US"),
         productUrl: z.string().optional(),
-        isManual: z.boolean().default(false),
-        price: z.number().optional(),
-        weight: z.number().optional(),
-        bsr: z.number().optional(),
-        reviewCount: z.number().optional(),
-        rating: z.number().optional(),
-        sellerCount: z.number().optional(),
-        category: z.string().optional(),
-        hasBattery: z.boolean().optional(),
-        isElectronic: z.boolean().optional(),
-        isFragile: z.boolean().optional(),
+        isManual: z.literal(false).default(false),
       })
     )
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
 
-      let jobInput = input.productUrl || input.title;
-      let jobType = input.productUrl ? "url" : "keyword";
+      const jobInput = input.productUrl || input.title.trim();
+      const jobType = input.productUrl ? "url" : "keyword";
 
-      if (input.isManual) {
-        jobType = "manual";
-        jobInput = JSON.stringify({
-          title: input.title,
-          asin: input.asin,
-          price: input.price,
-          weight: input.weight,
-          bsr: input.bsr,
-          reviewCount: input.reviewCount,
-          rating: input.rating,
-          sellerCount: input.sellerCount,
-          category: input.category,
-          hasBattery: input.hasBattery,
-          isElectronic: input.isElectronic,
-          isFragile: input.isFragile,
-        });
+      if (input.productUrl) {
+        let parsed: URL;
+        try {
+          parsed = new URL(input.productUrl);
+        } catch {
+          throw new Error("A valid Amazon product URL is required.");
+        }
+        if (
+          !/^([a-z0-9-]+\.)?amazon\.[a-z.]+$/i.test(parsed.hostname) ||
+          !/(?:\/dp\/|\/gp\/product\/)[A-Z0-9]{10}/i.test(parsed.pathname)
+        ) {
+          throw new Error(
+            "Enter an Amazon product URL containing a valid ASIN."
+          );
+        }
       }
 
       // Queue the job instead of doing it inline
@@ -122,7 +116,10 @@ export const analysisRouter = createRouter({
         totalScore,
         grade,
         recommendation,
-        analysisData: { ...productData, calculatedAt: new Date().toISOString() },
+        analysisData: {
+          ...productData,
+          calculatedAt: new Date().toISOString(),
+        },
       });
 
       return {
@@ -191,10 +188,14 @@ ${input.analysis}
 
 JSON ফরম্যাটে দিন যাতে পার্স করা যায়।`;
 
-      const trendsText = await callAIWithFallback([
-        { role: "system", content: BANGLA_SYSTEM_PROMPT },
-        { role: "user", content: prompt },
-      ], 0.5, 2000);
+      const trendsText = await callAIWithFallback(
+        [
+          { role: "system", content: BANGLA_SYSTEM_PROMPT },
+          { role: "user", content: prompt },
+        ],
+        0.5,
+        2000
+      );
 
       return {
         keyword: input.keyword,
@@ -263,7 +264,9 @@ ${productScore ? `স্কোর: ${productScore.totalScore}/130 — গ্র�
 
 ব্যবসায়িক টার্মগুলোর বাংলা অনুবাদ বন্ধনীতে দিন। টেবিল ও বুলেট পয়েন্ট ব্যবহার করুন।`;
 
-      const systemPrompt = await buildGroundedSystemPrompt(product.marketplace || "US");
+      const systemPrompt = await buildGroundedSystemPrompt(
+        product.marketplace || "US"
+      );
       const reportContent = await callAIWithFallback([
         { role: "system", content: systemPrompt },
         { role: "user", content: prompt },
@@ -291,17 +294,32 @@ ${productScore ? `স্কোর: ${productScore.totalScore}/130 — গ্র�
       await db
         .update(products)
         .set({
-          price: product.price ? product.price : (parsedSpecs.price ? String(parsedSpecs.price) : null),
-          bsr: product.bsr ? product.bsr : (parsedSpecs.bsr || null),
-          reviewCount: product.reviewCount ? product.reviewCount : (parsedSpecs.reviewCount || null),
-          rating: product.rating ? product.rating : (parsedSpecs.rating ? String(parsedSpecs.rating) : null),
-          sellerCount: product.sellerCount ? product.sellerCount : (parsedSpecs.sellerCount || null),
-          salesEstimate: product.salesEstimate ? product.salesEstimate : (parsedSpecs.salesEstimate || null),
-          bsrCategory: product.bsrCategory ? product.bsrCategory : (parsedSpecs.category || null),
+          price: product.price
+            ? product.price
+            : parsedSpecs.price
+              ? String(parsedSpecs.price)
+              : null,
+          bsr: product.bsr ? product.bsr : parsedSpecs.bsr || null,
+          reviewCount: product.reviewCount
+            ? product.reviewCount
+            : parsedSpecs.reviewCount || null,
+          rating: product.rating
+            ? product.rating
+            : parsedSpecs.rating
+              ? String(parsedSpecs.rating)
+              : null,
+          sellerCount: product.sellerCount
+            ? product.sellerCount
+            : parsedSpecs.sellerCount || null,
+          salesEstimate: product.salesEstimate
+            ? product.salesEstimate
+            : parsedSpecs.salesEstimate || null,
+          bsrCategory: product.bsrCategory
+            ? product.bsrCategory
+            : parsedSpecs.category || null,
         })
         .where(eq(products.id, product.id));
 
       return newReport;
     }),
 });
-

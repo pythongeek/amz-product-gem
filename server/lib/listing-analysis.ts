@@ -1,4 +1,4 @@
-import { KeywordSearchListing } from "@db/schema";
+import type { InsertKeywordSearchListing } from "@db/schema";
 
 // Input type for the analysis functions
 export interface ListingInput {
@@ -17,11 +17,11 @@ export interface MarketAssessment {
   totalListings: number;
   avgPrice: number;
   avgReviewCount: number;
-  topBrandShare: number;          // 0-1
+  topBrandShare: number; // 0-1
   priceSpreadRatio: number;
-  reviewCountGiniLike: number;    // concentration measure across listings
+  reviewCountGiniLike: number; // concentration measure across listings
   marketVerdict: "green" | "yellow" | "red";
-  marketVerdictReason: string;    // short Bangla-ready reason string
+  marketVerdictReason: string; // short Bangla-ready reason string
   bestOpportunityAsin: string | null;
 }
 
@@ -38,7 +38,10 @@ export interface ListingScore {
  * @param totalResultCount - Total number of listings for this keyword (from PA-API)
  * @returns MarketAssessment object
  */
-export function assessMarket(listings: ListingInput[], totalResultCount: number): MarketAssessment {
+export function assessMarket(
+  listings: ListingInput[],
+  totalResultCount: number
+): MarketAssessment {
   if (listings.length === 0) {
     return {
       totalListings: totalResultCount,
@@ -59,27 +62,37 @@ export function assessMarket(listings: ListingInput[], totalResultCount: number)
   const brands = listings.map(l => l.brand).filter(b => b);
 
   const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
-  const avgReviewCount = reviewCounts.reduce((sum, r) => sum + r, 0) / reviewCounts.length;
+  const avgReviewCount =
+    reviewCounts.reduce((sum, r) => sum + r, 0) / reviewCounts.length;
 
   // Calculate brand concentration (top brand's share of listings)
   const brandCounts: Record<string, number> = {};
   brands.forEach(brand => {
-    brandCounts[brand] = (brandCounts[brand] || 0) + 1;
+    if (brand) brandCounts[brand] = (brandCounts[brand] || 0) + 1;
   });
-  const topBrand = Object.entries(brandCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-  const topBrandShare = topBrand ? brandCounts[topBrand] / listings.length : 0;
+  const topBrand =
+    Object.entries(brandCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  const topBrandShare =
+    topBrand && brandCounts[topBrand] !== undefined
+      ? brandCounts[topBrand] / listings.length
+      : 0;
 
   // Calculate price spread ratio (max-min)/median
   const sortedPrices = [...prices].sort((a, b) => a - b);
   const medianPrice = sortedPrices[Math.floor(sortedPrices.length / 2)];
-  const priceSpreadRatio = medianPrice > 0 ? (sortedPrices[sortedPrices.length - 1] - sortedPrices[0]) / medianPrice : 0;
+  const priceSpreadRatio =
+    medianPrice > 0
+      ? (sortedPrices[sortedPrices.length - 1] - sortedPrices[0]) / medianPrice
+      : 0;
 
   // Calculate review count concentration (Gini-like coefficient)
   const sortedReviews = [...reviewCounts].sort((a, b) => a - b);
   const meanReviews = avgReviewCount;
   const reviewDifferences = sortedReviews.map(r => Math.abs(r - meanReviews));
-  const meanDifference = reviewDifferences.reduce((sum, d) => sum + d, 0) / reviewDifferences.length;
-  const reviewCountGiniLike = meanReviews > 0 ? meanDifference / meanReviews : 0;
+  const meanDifference =
+    reviewDifferences.reduce((sum, d) => sum + d, 0) / reviewDifferences.length;
+  const reviewCountGiniLike =
+    meanReviews > 0 ? meanDifference / meanReviews : 0;
 
   // Determine market verdict
   let marketVerdict: "green" | "yellow" | "red" = "green";
@@ -87,26 +100,40 @@ export function assessMarket(listings: ListingInput[], totalResultCount: number)
 
   if (topBrandShare > 0.6 || avgReviewCount > 2000) {
     marketVerdict = "red";
-    marketVerdictReason = topBrandShare > 0.6 ? "ব্র্যান্ড ডমিনেটেড মার্কেট" : "অত্যধিক প্রতিযোগিতা";
-  } else if (topBrandShare > 0.4 || reviewCountGiniLike > 0.5 || avgReviewCount > 500) {
+    marketVerdictReason =
+      topBrandShare > 0.6
+        ? "ব্র্যান্ড ডমিনেটেড মার্কেট"
+        : "অত্যধিক প্রতিযোগিতা";
+  } else if (
+    topBrandShare > 0.4 ||
+    reviewCountGiniLike > 0.5 ||
+    avgReviewCount > 500
+  ) {
     marketVerdict = "yellow";
-    marketVerdictReason = topBrandShare > 0.4 ? "ব্র্যান্ডের প্রভাব আছে" : "প্রতিযোগিতা মাঝারি";
+    marketVerdictReason =
+      topBrandShare > 0.4 ? "ব্র্যান্ডের প্রভাব আছে" : "প্রতিযোগিতা মাঝারি";
   }
 
   // Find best opportunity (highest scoring listing that's not the current #1 by reviews)
-  const sortedByReviews = [...listings].sort((a, b) => b.reviewCount - a.reviewCount);
+  const sortedByReviews = [...listings].sort(
+    (a, b) => b.reviewCount - a.reviewCount
+  );
   const topListingByReviews = sortedByReviews[0];
 
-  const scoredListings = listings.map(listing => {
-    const score = scoreListing(listing, {
-      medianReviews: avgReviewCount,
-      medianPrice: avgPrice,
-      topBrand: topBrand || "",
-    });
-    return { ...listing, score: score.score };
-  }).sort((a, b) => b.score - a.score);
+  const scoredListings = listings
+    .map(listing => {
+      const score = scoreListing(listing, {
+        medianReviews: avgReviewCount,
+        medianPrice: avgPrice,
+        topBrand: topBrand || "",
+      });
+      return { ...listing, score: score.score };
+    })
+    .sort((a, b) => b.score - a.score);
 
-  const bestOpportunity = scoredListings.find(l => l.asin !== topListingByReviews.asin) || scoredListings[0];
+  const bestOpportunity =
+    scoredListings.find(l => l.asin !== topListingByReviews.asin) ||
+    scoredListings[0];
 
   return {
     totalListings: totalResultCount,
@@ -149,13 +176,13 @@ export function scoreListing(
   // Price significantly below market average = potential value play
   if (listing.price < marketStats.medianPrice * 0.8) {
     score += 10;
-    reasons.push("গড় প্রাইসের চেয়ে কম — ভ্যালু প্লে")
+    reasons.push("গড় প্রাইসের চেয়ে কম — ভ্যালু প্লে");
   }
 
   // Price significantly above market average = potential premium opportunity
   if (listing.price > marketStats.medianPrice * 1.2) {
     score += 5;
-    reasons.push("গড় প্রাইসের চেয়ে বেশি — প্রিমিয়াম সুযোগ")
+    reasons.push("গড় প্রাইসের চেয়ে বেশি — প্রিমিয়াম সুযোগ");
   }
 
   // Same brand as the dominant player -> penalize (already-crowded corner)
@@ -198,7 +225,7 @@ export function scoreListing(
   return {
     score,
     verdict,
-    reason: reasons.length > 0 ? reasons.join("; ") : "স্ট্যান্ডার্ড লিস্টিং"
+    reason: reasons.length > 0 ? reasons.join("; ") : "স্ট্যান্ডার্ড লিস্টিং",
   };
 }
 
@@ -218,15 +245,15 @@ export function mapToKeywordSearchListing(
   score: number,
   verdict: string,
   reason: string
-): KeywordSearchListing {
+): InsertKeywordSearchListing {
   return {
     searchId,
     position,
     asin: item.asin,
     title: item.title,
-    brand: item.brand,
-    price: item.price,
-    rating: item.rating,
+    brand: item.brand ?? null,
+    price: String(item.price),
+    rating: String(item.rating),
     reviewCount: item.reviewCount,
     imageUrl: item.imageUrl,
     isSponsored: false, // PA-API doesn't provide this, default to false

@@ -1,21 +1,22 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
-import { callAIWithFallback, buildGroundedSystemPrompt, BANGLA_SYSTEM_PROMPT } from "./lib/ai";
 import { getDb } from "./queries/connection";
 import { keywordSearches, keywordSearchListings } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { parseAmazonSearchInput } from "@/lib/amazon-url";
-import { fetchListingsForKeyword } from "./lib/amazon-paapi";
-import { assessMarket, scoreListing, mapToKeywordSearchListing } from "./lib/listing-analysis";
 
 export const keywordResearchRouter = createRouter({
   // ── Analyze Keyword (queue-based to bypass 8s timeout) ──
   analyze: authedQuery
-    .input(z.object({ input: z.string().min(1), marketplace: z.string().optional() }))
+    .input(
+      z.object({ input: z.string().min(1), marketplace: z.string().optional() })
+    )
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
 
-      const { keyword, marketplace: detected } = parseAmazonSearchInput(input.input);
+      const { keyword, marketplace: detected } = parseAmazonSearchInput(
+        input.input
+      );
       const marketplace = input.marketplace || detected;
 
       // Queue the job instead of doing it inline
@@ -84,11 +85,11 @@ export const keywordResearchRouter = createRouter({
       }
 
       // Fallback to existing researchJobs for backward compatibility
-      const { ResearchJob } = await import("@db/schema");
+      const { researchJobs } = await import("@db/schema");
       const [legacyJob] = await db
         .select()
-        .from(ResearchJob)
-        .where(eq(ResearchJob.id, input.jobId))
+        .from(researchJobs)
+        .where(eq(researchJobs.id, input.jobId))
         .limit(1);
 
       if (!legacyJob) {

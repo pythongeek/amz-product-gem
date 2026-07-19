@@ -2,13 +2,33 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { env } from "./lib/env";
 import { getDb } from "./queries/connection";
-import { researchJobs, reports, products, productScores, alerts, productSnapshots, keywordSearches, keywordSearchListings } from "@db/schema";
+import {
+  researchJobs,
+  reports,
+  products,
+  productScores,
+  alerts,
+  productSnapshots,
+  keywordSearches,
+  keywordSearchListings,
+} from "@db/schema";
 import { eq, and, desc, or, isNull, isNotNull } from "drizzle-orm";
-import { callAIWithFallback, buildGroundedSystemPrompt, BANGLA_SYSTEM_PROMPT } from "./lib/ai";
+import {
+  callAIWithFallback,
+  buildGroundedSystemPrompt,
+  BANGLA_SYSTEM_PROMPT,
+} from "./lib/ai";
 import { TRPCError } from "@trpc/server";
-import { scoreProduct, extractSpecsFromReport, ProductInput } from "./lib/scoring";
-import { fetchListingsForKeyword, fetchAmazonProduct } from "./lib/amazon-paapi";
-import { assessMarket, scoreListing, mapToKeywordSearchListing } from "./lib/listing-analysis";
+import { extractSpecsFromReport } from "./lib/scoring";
+import {
+  fetchListingsForKeyword,
+  fetchAmazonProduct,
+} from "./lib/amazon-paapi";
+import {
+  assessMarket,
+  scoreListing,
+  mapToKeywordSearchListing,
+} from "./lib/listing-analysis";
 import { appRouter } from "./router";
 
 /**
@@ -24,7 +44,10 @@ const requireCronSecret = async (c: any, next: any) => {
   try {
     const secret = c.req.header("x-cron-secret");
     if (!env.cronSecret || secret !== env.cronSecret) {
-      return c.json({ error: "Unauthorized — invalid or missing x-cron-secret" }, 401);
+      return c.json(
+        { error: "Unauthorized — invalid or missing x-cron-secret" },
+        401
+      );
     }
     await next();
   } catch (err: any) {
@@ -41,7 +64,7 @@ cronApp.use("*", requireCronSecret);
 // - The cron job has 300s maxDuration in vercel.json
 // - The request comes from outside Vercel's HTTP gateway
 
-cronApp.post("/process-keyword-search", async (c) => {
+cronApp.post("/process-keyword-search", async c => {
   const db = getDb();
 
   // Pick one pending OR partially processed keyword search (FIFO)
@@ -62,7 +85,11 @@ cronApp.post("/process-keyword-search", async (c) => {
     .limit(1);
 
   if (jobs.length === 0) {
-    return c.json({ ok: true, processed: 0, message: "No pending or partially processed keyword searches" });
+    return c.json({
+      ok: true,
+      processed: 0,
+      message: "No pending or partially processed keyword searches",
+    });
   }
 
   const search = jobs[0];
@@ -79,18 +106,25 @@ cronApp.post("/process-keyword-search", async (c) => {
         .where(eq(keywordSearches.id, search.id));
 
       // Fetch listings from Amazon PA-API
-      const result = await fetchListingsForKeyword(keyword, marketplace);
+      const result = await fetchListingsForKeyword(
+        keyword,
+        marketplace || "US"
+      );
 
       // Calculate market assessment
-      const marketAssessment = assessMarket(result.items, result.totalResultCount);
+      const marketAssessment = assessMarket(
+        result.items,
+        result.totalResultCount
+      );
 
       // Calculate top brand
       const brands = result.items.map(l => l.brand).filter(b => b);
       const brandCounts: Record<string, number> = {};
       brands.forEach(brand => {
-        brandCounts[brand] = (brandCounts[brand] || 0) + 1;
+        if (brand) brandCounts[brand] = (brandCounts[brand] || 0) + 1;
       });
-      const topBrand = Object.entries(brandCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+      const topBrand =
+        Object.entries(brandCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
 
       // Score each listing and map to database structure
       const listingsToInsert = result.items.map((item, index) => {
@@ -99,7 +133,14 @@ cronApp.post("/process-keyword-search", async (c) => {
           medianPrice: marketAssessment.avgPrice,
           topBrand: topBrand,
         });
-        return mapToKeywordSearchListing(item, search.id, index + 1, scoreResult.score, scoreResult.verdict, scoreResult.reason);
+        return mapToKeywordSearchListing(
+          item,
+          search.id,
+          index + 1,
+          scoreResult.score,
+          scoreResult.verdict,
+          scoreResult.reason
+        );
       });
 
       // Insert scored listings into database
@@ -116,14 +157,20 @@ cronApp.post("/process-keyword-search", async (c) => {
         })
         .where(eq(keywordSearches.id, search.id));
 
-      return c.json({ ok: true, processed: 1, phase: 1, searchId: search.id, totalListings: result.items.length });
+      return c.json({
+        ok: true,
+        processed: 1,
+        phase: 1,
+        searchId: search.id,
+        totalListings: result.items.length,
+      });
     }
 
     // --- PHASE 2: AI Summary (if status is running and scores exist) ---
     if (search.status === "running" && search.aggregateScores) {
       const marketAssessment: any = search.aggregateScores;
-      const systemPrompt = await buildGroundedSystemPrompt(marketplace);
-      
+      const systemPrompt = await buildGroundedSystemPrompt(marketplace || "US");
+
       const userPrompt = `## কীওয়ার্ড: "${keyword}"
 ## মার্কেটপ্লেস: ${marketplace}
 ## মোট ফলাফল: ${search.totalResultCount}
@@ -162,7 +209,11 @@ cronApp.post("/process-keyword-search", async (c) => {
       return c.json({ ok: true, processed: 1, phase: 2, searchId: search.id });
     }
 
-    return c.json({ ok: true, processed: 0, message: "No valid phase to process" });
+    return c.json({
+      ok: true,
+      processed: 0,
+      message: "No valid phase to process",
+    });
   } catch (err: any) {
     // Mark search as failed
     await db
@@ -170,13 +221,16 @@ cronApp.post("/process-keyword-search", async (c) => {
       .set({ status: "failed", error: err.message })
       .where(eq(keywordSearches.id, search.id));
 
-    return c.json({ ok: false, processed: 0, searchId: search.id, error: err.message }, 500);
+    return c.json(
+      { ok: false, processed: 0, searchId: search.id, error: err.message },
+      500
+    );
   }
 });
 
 // ── 3. Process Pending Research Jobs ──────────────────────────────
 // Called every 5 minutes by cron-jobs.org.
-cronApp.post("/process-research", async (c) => {
+cronApp.post("/process-research", async c => {
   const db = getDb();
 
   // Pick one pending job (FIFO)
@@ -203,78 +257,58 @@ cronApp.post("/process-research", async (c) => {
     let prompt = "";
     let finalScores: any = {};
 
+    if (job.inputType === "manual") {
+      throw new Error(
+        "Manual research is disabled. Submit an Amazon product URL or keyword so the report uses live Amazon data."
+      );
+    }
+
     if (job.inputType === "url") {
       // Extract ASIN from URL
       const match = job.input.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/);
       const asin = match ? match[1] : job.input;
-      
-      const product = await fetchAmazonProduct(asin, "US");
-      
-      prompt = `Analyze this Amazon product:
+
+      const product = await fetchAmazonProduct(asin, job.marketplace || "US");
+
+      prompt = `Analyze this Amazon product using only the live Amazon data below.
 ASIN: ${product.asin}
 Title: ${product.title}
-Brand: ${product.brand}
-Price: $${product.price}
+Price: ${product.price}
 Rating: ${product.rating} stars (${product.reviewCount} reviews)
-Is Prime: ${product.isPrime ? 'Yes' : 'No'}
+BSR: ${product.bsr ?? "not returned by the live source"}
+Category: ${product.bsrCategory ?? "not returned by the live source"}
+Seller count: ${product.sellerCount ?? "not returned by the live source"}
 
-Provide a comprehensive Amazon FBA research report in Bangla. Include: product summary, market demand, competition analysis, pricing, sales velocity, profit potential, risks, and a final recommendation (PASS/CAUTION/FAIL).`;
-
-      // Real scores based on product
-      const productScore = scoreProduct({
-        price: product.price,
-        size: "standard", // Mock for now as we don't scrape size
-        weight: 1, // Mock
-        searchVolume: 10000,
-        reviewCount: product.reviewCount,
-        category: "General",
-        seasonality: "Medium",
-        simplicity: "High",
-        trend: "Stable",
-        brandDominance: product.brand === "Unknown" ? "Low" : "Medium",
-        margin: 30, // Mock
-        differentiation: "Medium",
-        manufacturability: "Easy"
-      });
-
-      finalScores = productScore.scores;
-
+Write the report in Bangla. Do not estimate sales velocity, margin, demand, BSR, fees, weight, dimensions, or seller information. For each unavailable metric write “লাইভ সোর্সে পাওয়া যায়নি”, explain its impact, and make the final recommendation conditional where needed.`;
+      finalScores = {};
     } else {
       const keyword = job.input;
-      const result = await fetchListingsForKeyword(keyword, "US");
-      const marketAssessment = assessMarket(result.items, result.totalResultCount);
+      const result = await fetchListingsForKeyword(
+        keyword,
+        job.marketplace || "US"
+      );
+      const marketAssessment = assessMarket(
+        result.items,
+        result.totalResultCount
+      );
 
       prompt = `Conduct Amazon FBA research on the keyword: "${keyword}".
-Market Overview:
+Market Overview from the live result set:
 - Average Price: $${marketAssessment.avgPrice.toFixed(2)}
 - Average Reviews: ${marketAssessment.avgReviewCount.toFixed(0)}
 - Top Brand Share: ${(marketAssessment.topBrandShare * 100).toFixed(1)}%
-- Total Listings Analyzed: ${result.items.length}
+- Total Results: ${result.totalResultCount}
+- Listings Analysed: ${result.items.length}
 
-Provide a comprehensive report in Bangla. Include: market demand, competition level, estimated pricing, sales velocity, profit potential, risks, and a final recommendation (PASS/CAUTION/FAIL).`;
-
-      // Estimate keyword scores based on market averages
-      const marketScore = scoreProduct({
-        price: marketAssessment.avgPrice,
-        size: "standard",
-        weight: 1,
-        searchVolume: result.totalResultCount > 1000 ? 50000 : 5000,
-        reviewCount: marketAssessment.avgReviewCount,
-        category: "General",
-        seasonality: "Medium",
-        simplicity: "Medium",
-        trend: "Stable",
-        brandDominance: marketAssessment.topBrandShare > 0.3 ? "High" : "Low",
-        margin: 30,
-        differentiation: "Medium",
-        manufacturability: "Medium"
-      });
-
-      finalScores = marketScore.scores;
+Write the report in Bangla based exclusively on this observed aggregate data. Do not invent search volume, sales velocity, margin, seasonality, fees, or demand history. State “লাইভ সোর্সে পাওয়া যায়নি” for unavailable information and make any recommendation conditional on those gaps.`;
+      finalScores = {};
     }
 
     const result = await callAIWithFallback([
-      { role: "system", content: BANGLA_SYSTEM_PROMPT },
+      {
+        role: "system",
+        content: await buildGroundedSystemPrompt(job.marketplace || "US"),
+      },
       { role: "user", content: prompt },
     ]);
 
@@ -298,11 +332,14 @@ Provide a comprehensive report in Bangla. Include: market demand, competition le
       .set({ status: "failed", error: err.message })
       .where(eq(researchJobs.id, job.id));
 
-    return c.json({ ok: false, processed: 0, jobId: job.id, error: err.message }, 500);
+    return c.json(
+      { ok: false, processed: 0, jobId: job.id, error: err.message },
+      500
+    );
   }
 });
 
-cronApp.post("/check-alerts", async (c) => {
+cronApp.post("/check-alerts", async c => {
   // Placeholder for alert checking logic
   return c.json({ ok: true, message: "Alerts checked (placeholder)" });
 });
